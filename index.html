@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PTCG 全国图鉴</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div>
+          <p class="eyebrow">Pokemon TCG</p>
+          <h1>全国图鉴</h1>
+        </div>
+      </div>
+      <section class="controls" aria-label="筛选">
+        <label class="search">
+          <span>搜索</span>
+          <input id="searchInput" type="search" placeholder="编号或名字" autocomplete="off" />
+        </label>
+        <label class="select-wrap">
+          <span>世代</span>
+          <select id="generationSelect">
+            <option value="all">全部</option>
+            <option value="1">Gen 1</option>
+            <option value="2">Gen 2</option>
+            <option value="3">Gen 3</option>
+            <option value="4">Gen 4</option>
+            <option value="5">Gen 5</option>
+            <option value="6">Gen 6</option>
+            <option value="7">Gen 7</option>
+            <option value="8">Gen 8</option>
+            <option value="9">Gen 9</option>
+          </select>
+        </label>
+        <button id="refreshDataBtn" class="refresh-btn" type="button">刷新数据</button>
+      </section>
+      <div class="status" id="status">准备加载</div>
+    </header>
+
+    <main>
+      <section class="summary" aria-live="polite">
+        <span id="shownCount">0</span>
+        <span> / </span>
+        <span id="totalCount">0</span>
+      </section>
+
+      <section id="dexGrid" class="dex-grid" aria-label="图鉴列表"></section>
+    </main>
+
+    <template id="dexCardTemplate">
+      <article class="dex-card">
+        <div class="card-head">
+          <div>
+            <div class="dex-number"></div>
+            <h2></h2>
+          </div>
+          <span class="rarity-chip"></span>
+        </div>
+        <div class="image-stage">
+          <img alt="" loading="lazy" />
+          <div class="empty-state">暂无全图 / IR</div>
+        </div>
+        <label class="variant-picker">
+          <select></select>
+        </label>
+      </article>
+    </template>
+
+    <dialog id="imageDialog" class="image-dialog">
+      <button id="closeDialogBtn" class="close-dialog" type="button" aria-label="关闭">×</button>
+      <figure>
+        <img id="dialogImage" alt="" />
+        <figcaption id="dialogCaption"></figcaption>
+      </figure>
+    </dialog>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
