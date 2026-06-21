@@ -168,7 +168,7 @@ button {
 
 .dex-card {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--line);
@@ -180,8 +180,8 @@ button {
 .card-head {
   position: relative;
   display: block;
-  min-height: 64px;
-  padding-top: 2px;
+  min-height: 46px;
+  padding-top: 0;
 }
 
 .card-head > div {
@@ -197,8 +197,8 @@ button {
 
 h2 {
   display: grid;
-  gap: 2px;
-  margin: 4px 0 0;
+  gap: 1px;
+  margin: 2px 0 0;
   overflow-wrap: normal;
   font-size: 13px;
   line-height: 1.1;
