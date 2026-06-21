@@ -1,7 +1,7 @@
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
 const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 16;
+const CACHE_VERSION = 17;
 const FETCH_TIMEOUT_MS = 15000;
 
 const NATIONAL_DEX_RANGES = {
@@ -399,10 +399,12 @@ function normalizeCandidate(card, group) {
     form: getCardForm(card.name),
     isShiny: isShinyCard(card),
     eraCode: getEraCode(card.set),
+    setDisplayCode: getSetDisplayCode(card.set),
     ptcgoCode: getPtcgoCode(card.set),
     setId: card.set?.id || "",
     setName: card.set?.name || "",
     number: card.localId || "",
+    printedNumber: getPrintedNumber(card),
     rarity: card.rarity || group.rarity,
     label: group.label,
     rank: group.rank,
@@ -488,9 +490,7 @@ function renderDexCard(mon) {
 
   const applyCard = (card) => {
     setCardTitle(node, mon.name, zhName);
-    rarity.textContent = [card.eraCode, card.ptcgoCode || card.setId || card.setName]
-      .filter(Boolean)
-      .join(" ");
+    rarity.textContent = card.setDisplayCode || card.eraCode || card.ptcgoCode || card.setId || card.setName;
     image.src = card.image;
     image.alt = `${card.name} ${card.source}`;
     image.onerror = () => {
@@ -536,7 +536,7 @@ function renderDexCard(mon) {
     for (const card of activeCards) {
       const option = document.createElement("option");
       option.value = card.id;
-      option.textContent = `${card.label} · ${card.ptcgoCode || card.setId || card.setName} #${card.number}`;
+      option.textContent = `${card.label} · ${card.ptcgoCode || card.setId || card.setName} ${card.printedNumber}`;
       select.appendChild(option);
     }
 
@@ -690,6 +690,34 @@ function getPtcgoCode(set) {
     state.ptcgoCodesBySetName.get(normalizeSetName(set.name || "")) ||
     ""
   );
+}
+
+function getSetDisplayCode(set) {
+  const id = String(set?.id || "");
+  const svMatch = id.match(/^sv(\d+)(?:pt(\d+))?/i);
+  if (svMatch) {
+    const main = Number(svMatch[1]);
+    return `SV${String(main).padStart(2, "0")}`;
+  }
+
+  const swshMatch = id.match(/^swsh(\d+)(?:\.(\d+))?/i);
+  if (swshMatch) {
+    return `SWSH${String(Number(swshMatch[1])).padStart(2, "0")}`;
+  }
+
+  const smMatch = id.match(/^sm(\d+)/i);
+  if (smMatch) return `SM${String(Number(smMatch[1])).padStart(2, "0")}`;
+
+  const xyMatch = id.match(/^xy(\d+)/i);
+  if (xyMatch) return `XY${String(Number(xyMatch[1])).padStart(2, "0")}`;
+
+  return getEraCode(set);
+}
+
+function getPrintedNumber(card) {
+  const number = card.localId || card.number || "";
+  const officialCount = card.set?.cardCount?.official || "";
+  return officialCount ? `${number}/${officialCount}` : number;
 }
 
 function getEraCode(set) {
