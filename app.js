@@ -420,11 +420,8 @@ function renderDexCard(mon) {
   const select = node.querySelector("select");
   const formButtons = node.querySelector(".form-buttons");
   const forms = getCandidateForms(cards, mon);
-  if (!forms.some((form) => form.key === activeFormKey)) {
-    activeFormKey = forms[0]?.key || "base";
-  }
 
-  if (forms.length > 1) {
+  if (forms.length) {
     for (const form of forms) {
       const button = document.createElement("button");
       button.className = "form-button";
@@ -435,7 +432,7 @@ function renderDexCard(mon) {
       button.setAttribute("aria-pressed", String(form.key === activeFormKey));
       if (form.key === activeFormKey) button.classList.add("active");
       button.addEventListener("click", () => {
-        activeFormKey = form.key;
+        activeFormKey = activeFormKey === form.key ? "base" : form.key;
         updateFormButtons();
         rebuildOptions();
       });
@@ -539,10 +536,12 @@ function getCandidateForms(cards, mon) {
 
   for (const name of indexedNames) {
     const form = getIndexedForm(name, mon.name);
+    if (form.key === "base") continue;
     formsByKey.set(form.key, form);
   }
 
   for (const card of cards) {
+    if (card.form.key === "base") continue;
     formsByKey.set(card.form.key, card.form);
   }
 
