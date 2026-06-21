@@ -1,7 +1,7 @@
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
 const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 9;
+const CACHE_VERSION = 10;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -17,12 +17,13 @@ const NATIONAL_DEX_RANGES = {
 
 const RARITY_GROUPS = [
   { rarity: "Illustration rare", rank: 1, label: "IR" },
+  { rarity: "Special illustration rare", rank: 2, label: "SIR" },
 ];
 
 const EXTRA_FULL_ART_PROMOS = [
-  { id: "svp-044", rank: 2, label: "Promo" },
-  { id: "svp-046", rank: 2, label: "Promo" },
-  { id: "svp-048", rank: 2, label: "Promo" },
+  { id: "svp-044", rank: 4, label: "Promo" },
+  { id: "svp-046", rank: 4, label: "Promo" },
+  { id: "svp-048", rank: 4, label: "Promo" },
 ];
 
 const SET_CODE_OVERRIDES = new Map([
@@ -230,26 +231,18 @@ async function loadCardCandidates() {
       loaded += 1;
       if (loaded % 40 === 0) setStatus(`整理候选卡 ${loaded}`);
 
-      if (
-        !detail ||
-        detail.category !== "Pokemon" ||
-        detail.rarity === "Special illustration rare" ||
-        detail.rarity !== group.rarity ||
-        !Array.isArray(detail.dexId)
-      ) {
+      if (!detail || detail.category !== "Pokemon" || detail.rarity !== group.rarity || !Array.isArray(detail.dexId)) {
         return;
       }
 
       for (const dexId of detail.dexId) {
         if (!Number.isInteger(dexId) || dexId > 1025) continue;
-        const candidate = normalizeCandidate(detail, group);
-        const existing = state.cardsByDex.get(dexId) || [];
-        existing.push(candidate);
-        existing.sort(compareCandidate);
-        state.cardsByDex.set(dexId, existing);
+        addCandidate(dexId, normalizeCandidate(detail, group));
       }
     });
   }
+
+  await loadAlternateFullArtCandidates();
 
   for (const promo of EXTRA_FULL_ART_PROMOS) {
     const detail = await fetchCardDetail(promo.id);
@@ -257,14 +250,55 @@ async function loadCardCandidates() {
 
     for (const dexId of detail.dexId) {
       if (!Number.isInteger(dexId) || dexId > 1025) continue;
-      const candidate = normalizeCandidate(detail, promo);
-      const existing = state.cardsByDex.get(dexId) || [];
-      if (!existing.some((card) => card.id === candidate.id)) {
-        existing.push(candidate);
-        existing.sort(compareCandidate);
-        state.cardsByDex.set(dexId, existing);
+      addCandidate(dexId, normalizeCandidate(detail, promo));
+    }
+  }
+}
+
+async function loadAlternateFullArtCandidates() {
+  setStatus("加载 Alt Art");
+  const cards = await fetchCardsByRarity("Ultra Rare");
+  const details = [];
+
+  await mapLimit(cards.filter((card) => card.image), 12, async (brief) => {
+    const detail = await fetchCardDetail(brief.id);
+    if (
+      detail?.category === "Pokemon" &&
+      detail.rarity === "Ultra Rare" &&
+      Array.isArray(detail.dexId) &&
+      detail.set?.id?.startsWith("swsh") &&
+      /^\d+$/.test(String(detail.localId || ""))
+    ) {
+      details.push(detail);
+    }
+  });
+
+  const groups = new Map();
+  for (const detail of details) {
+    const key = `${detail.set?.id || ""}:${normalizeCardName(detail.name)}`;
+    const group = groups.get(key) || [];
+    group.push(detail);
+    groups.set(key, group);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    group.sort((a, b) => getCardNumber(a.localId) - getCardNumber(b.localId));
+    for (const detail of group.slice(-1)) {
+      for (const dexId of detail.dexId) {
+        if (!Number.isInteger(dexId) || dexId > 1025) continue;
+        addCandidate(dexId, normalizeCandidate(detail, { rank: 3, label: "Alt Art" }));
       }
     }
+  }
+}
+
+function addCandidate(dexId, candidate) {
+  const existing = state.cardsByDex.get(dexId) || [];
+  if (!existing.some((card) => card.id === candidate.id)) {
+    existing.push(candidate);
+    existing.sort(compareCandidate);
+    state.cardsByDex.set(dexId, existing);
   }
 }
 
@@ -479,6 +513,15 @@ function titleCase(value) {
 
 function normalizeSetName(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeCardName(value) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function getCardNumber(value) {
+  const numeric = String(value || "").match(/\d+/)?.[0];
+  return numeric ? Number(numeric) : 0;
 }
 
 function setStatus(message) {
