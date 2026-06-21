@@ -1,7 +1,7 @@
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
 const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 15;
+const CACHE_VERSION = 16;
 const FETCH_TIMEOUT_MS = 15000;
 
 const NATIONAL_DEX_RANGES = {
@@ -245,7 +245,7 @@ async function loadCardCandidates() {
       loaded += 1;
       if (loaded % 40 === 0) setStatus(`整理候选卡 ${loaded}`);
 
-      if (!detail || detail.category !== "Pokemon" || detail.rarity !== group.rarity || !Array.isArray(detail.dexId)) {
+      if (!isEligiblePhysicalPokemonCard(detail) || detail.rarity !== group.rarity) {
         return;
       }
 
@@ -267,7 +267,7 @@ async function loadCardCandidates() {
       seen.add(brief.id);
 
       const detail = await fetchCardDetail(brief.id);
-      if (!detail || detail.category !== "Pokemon" || detail.rarity !== group.rarity || !Array.isArray(detail.dexId)) {
+      if (!isEligiblePhysicalPokemonCard(detail) || detail.rarity !== group.rarity) {
         return;
       }
 
@@ -282,7 +282,7 @@ async function loadCardCandidates() {
 
   for (const promo of EXTRA_FULL_ART_PROMOS) {
     const detail = await fetchCardDetail(promo.id);
-    if (!detail || detail.category !== "Pokemon" || !Array.isArray(detail.dexId)) continue;
+    if (!isEligiblePhysicalPokemonCard(detail)) continue;
 
     for (const dexId of detail.dexId) {
       if (!Number.isInteger(dexId) || dexId > 1025) continue;
@@ -299,9 +299,8 @@ async function loadAlternateFullArtCandidates() {
   await mapLimit(cards.filter((card) => card.image), 12, async (brief) => {
     const detail = await fetchCardDetail(brief.id);
     if (
-      detail?.category === "Pokemon" &&
+      isEligiblePhysicalPokemonCard(detail) &&
       detail.rarity === "Ultra Rare" &&
-      Array.isArray(detail.dexId) &&
       detail.set?.id?.startsWith("swsh") &&
       /^\d+$/.test(String(detail.localId || ""))
     ) {
@@ -336,6 +335,20 @@ function addCandidate(dexId, candidate) {
     existing.sort(compareCandidate);
     state.cardsByDex.set(dexId, existing);
   }
+}
+
+function isEligiblePhysicalPokemonCard(card) {
+  return Boolean(
+    card &&
+      card.category === "Pokemon" &&
+      Array.isArray(card.dexId) &&
+      !isTcgPocketSet(card.set)
+  );
+}
+
+function isTcgPocketSet(set) {
+  const id = String(set?.id || "");
+  return /^A\d/i.test(id) || id.toLowerCase().startsWith("tcgp");
 }
 
 async function fetchCardsByRarity(rarity) {
