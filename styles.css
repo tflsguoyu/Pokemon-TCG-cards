@@ -226,19 +226,19 @@ h2 {
   display: flex;
   justify-content: flex-end;
   gap: 3px;
-  max-width: 104px;
+  max-width: 150px;
 }
 
 .form-button {
   width: auto;
   height: 18px;
-  min-width: 26px;
-  padding: 0 5px;
+  min-width: 38px;
+  padding: 0 7px;
   border-color: rgba(40, 124, 99, 0.24);
   border-radius: 999px;
   background: rgba(40, 124, 99, 0.08);
   color: var(--green);
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
