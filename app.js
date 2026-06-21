@@ -1,7 +1,7 @@
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
 const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 10;
+const CACHE_VERSION = 11;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -215,10 +215,10 @@ async function fetchChineseName(id) {
 }
 
 async function loadCardCandidates() {
-  const seen = new Set();
   let loaded = 0;
 
   for (const group of RARITY_GROUPS) {
+    const seen = new Set();
     setStatus(`加载 ${group.label}`);
     const cards = await fetchCardsByRarity(group.rarity);
     const pokemonCards = cards.filter((card) => card.image);
