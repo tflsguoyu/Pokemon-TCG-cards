@@ -1,7 +1,7 @@
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
 const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 13;
+const CACHE_VERSION = 15;
 const FETCH_TIMEOUT_MS = 15000;
 
 const NATIONAL_DEX_RANGES = {
@@ -19,6 +19,15 @@ const NATIONAL_DEX_RANGES = {
 const RARITY_GROUPS = [
   { rarity: "Illustration rare", rank: 1, label: "IR" },
   { rarity: "Special illustration rare", rank: 2, label: "SIR" },
+];
+
+const SHINY_RARITY_GROUPS = [
+  { rarity: "One Shiny", rank: 5, label: "Shiny" },
+  { rarity: "Two Shiny", rank: 5, label: "Shiny" },
+  { rarity: "Shiny rare", rank: 5, label: "Shiny" },
+  { rarity: "Shiny rare V", rank: 5, label: "Shiny V" },
+  { rarity: "Shiny rare VMAX", rank: 5, label: "Shiny VMAX" },
+  { rarity: "Shiny Ultra Rare", rank: 5, label: "Shiny" },
 ];
 
 const EXTRA_FULL_ART_PROMOS = [
@@ -247,6 +256,28 @@ async function loadCardCandidates() {
     });
   }
 
+  for (const group of SHINY_RARITY_GROUPS) {
+    const seen = new Set();
+    setStatus(`加载 ${group.label}`);
+    const cards = await fetchCardsByRarity(group.rarity);
+    const pokemonCards = cards.filter((card) => card.image);
+
+    await mapLimit(pokemonCards, 12, async (brief) => {
+      if (seen.has(brief.id)) return;
+      seen.add(brief.id);
+
+      const detail = await fetchCardDetail(brief.id);
+      if (!detail || detail.category !== "Pokemon" || detail.rarity !== group.rarity || !Array.isArray(detail.dexId)) {
+        return;
+      }
+
+      for (const dexId of detail.dexId) {
+        if (!Number.isInteger(dexId) || dexId > 1025) continue;
+        addCandidate(dexId, normalizeCandidate(detail, group));
+      }
+    });
+  }
+
   await loadAlternateFullArtCandidates();
 
   for (const promo of EXTRA_FULL_ART_PROMOS) {
@@ -353,6 +384,7 @@ function normalizeCandidate(card, group) {
     highFallbackImage: `${card.image}/high.png`,
     source,
     form: getCardForm(card.name),
+    isShiny: isShinyCard(card),
     eraCode: getEraCode(card.set),
     ptcgoCode: getPtcgoCode(card.set),
     setId: card.set?.id || "",
@@ -425,6 +457,7 @@ function renderDexCard(mon) {
     for (const form of forms) {
       const button = document.createElement("button");
       button.className = "form-button";
+      if (form.key === "shiny") button.classList.add("shiny-button");
       button.type = "button";
       button.textContent = form.shortLabel;
       button.title = form.label;
@@ -463,8 +496,15 @@ function renderDexCard(mon) {
   };
 
   const getActiveCards = () => {
-    const filtered = cards.filter((card) => card.form.key === activeFormKey);
-    return filtered;
+    if (activeFormKey === "base") {
+      return cards.filter((card) => card.form.key === "base" && !card.isShiny);
+    }
+
+    if (activeFormKey === "shiny") {
+      return cards.filter((card) => card.isShiny);
+    }
+
+    return cards.filter((card) => card.form.key === activeFormKey && !card.isShiny);
   };
 
   const rebuildOptions = () => {
@@ -545,6 +585,15 @@ function getCandidateForms(cards, mon) {
     formsByKey.set(card.form.key, card.form);
   }
 
+  if (cards.some((card) => card.isShiny)) {
+    formsByKey.set("shiny", {
+      key: "shiny",
+      label: "Shiny",
+      shortLabel: "Shiny",
+      rank: 999,
+    });
+  }
+
   const forms = Array.from(formsByKey.values());
   forms.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
   return forms;
@@ -593,6 +642,19 @@ function getCardForm(name) {
       shortLabel: "Std",
       rank: 0,
     }
+  );
+}
+
+function isShinyCard(card) {
+  const rarity = String(card.rarity || "").toLowerCase();
+  const setId = card.set?.id || "";
+  const cardNumber = getCardNumber(card.localId);
+  const officialCount = card.set?.cardCount?.official || 0;
+
+  return (
+    rarity.includes("shiny") ||
+    rarity.includes("radiant") ||
+    (setId === "sv04.5" && officialCount > 0 && cardNumber > officialCount)
   );
 }
 

@@ -249,6 +249,17 @@ h2 {
   color: white;
 }
 
+.shiny-button {
+  border-color: rgba(216, 75, 61, 0.28);
+  background: rgba(241, 200, 75, 0.22);
+  color: #8a6400;
+}
+
+.shiny-button.active {
+  background: var(--yellow);
+  color: #4b3600;
+}
+
 .rarity-chip {
   position: absolute;
   top: 0;
