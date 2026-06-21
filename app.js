@@ -1,7 +1,8 @@
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
 const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 11;
+const CACHE_VERSION = 12;
+const FETCH_TIMEOUT_MS = 15000;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -70,10 +71,19 @@ async function init() {
 
   setStatus("加载全国图鉴");
 
-  const [species, ptcgoCodesBySetName] = await Promise.all([loadSpecies(), loadPtcgoCodes()]);
+  const species = await loadSpecies();
   state.species = species;
+  render();
+
+  setStatus("加载系列");
+  const ptcgoCodesBySetName = await loadPtcgoCodes();
   state.ptcgoCodesBySetName = ptcgoCodesBySetName;
-  await loadCardCandidates();
+
+  try {
+    await loadCardCandidates();
+  } catch {
+    setStatus("卡牌加载失败");
+  }
 
   render();
   setStatus(`已加载 ${state.cardsByDex.size}`);
@@ -148,9 +158,7 @@ function saveCache() {
 
 async function loadPtcgoCodes() {
   try {
-    const response = await fetch("https://api.pokemontcg.io/v2/sets");
-    if (!response.ok) return new Map();
-    const payload = await response.json();
+    const payload = await fetchJson("https://api.pokemontcg.io/v2/sets", { data: [] });
     return new Map(
       (payload.data || [])
         .filter((set) => set.name && set.ptcgoCode)
@@ -163,8 +171,7 @@ async function loadPtcgoCodes() {
 
 async function loadSpecies() {
   try {
-    const response = await fetch(POKEAPI_SPECIES);
-    const payload = await response.json();
+    const payload = await fetchJson(POKEAPI_SPECIES, { results: [] });
     return payload.results
       .map((item) => {
         const id = Number(item.url.match(/pokemon-species\/(\d+)\//)?.[1]);
@@ -198,9 +205,7 @@ async function loadChineseNames(species) {
 
 async function fetchChineseName(id) {
   try {
-    const response = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
-    if (!response.ok) return "";
-    const payload = await response.json();
+    const payload = await fetchJson(`https://pokeapi.co/api/v2/pokemon-species/${id}`, { names: [] });
     const names = payload.names || [];
     return (
       names.find((entry) => entry.language?.name === "zh-hans")?.name ||
@@ -304,18 +309,29 @@ function addCandidate(dexId, candidate) {
 
 async function fetchCardsByRarity(rarity) {
   const url = `${TCGDEX_BASE}/cards?rarity=${encodeURIComponent(rarity)}`;
-  const response = await fetch(url);
-  if (!response.ok) return [];
-  return response.json();
+  return fetchJson(url, []);
 }
 
 async function fetchCardDetail(id) {
   try {
-    const response = await fetch(`${TCGDEX_BASE}/cards/${id}`);
-    if (!response.ok) return null;
-    return response.json();
+    return fetchJson(`${TCGDEX_BASE}/cards/${id}`, null);
   } catch {
     return null;
+  }
+}
+
+async function fetchJson(url, fallback) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return fallback;
+    return response.json();
+  } catch {
+    return fallback;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
