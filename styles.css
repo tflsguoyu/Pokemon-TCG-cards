@@ -162,7 +162,7 @@ button {
 
 .dex-grid {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -180,7 +180,7 @@ button {
 .card-head {
   position: relative;
   display: block;
-  min-height: 46px;
+  min-height: 50px;
   padding-top: 0;
 }
 
@@ -199,6 +199,7 @@ h2 {
   display: grid;
   gap: 1px;
   margin: 2px 0 0;
+  padding-right: 62px;
   overflow-wrap: normal;
   font-size: 13px;
   line-height: 1.1;
@@ -216,6 +217,36 @@ h2 {
   color: var(--green);
   font-size: 11px;
   font-weight: 800;
+}
+
+.form-buttons {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 3px;
+  max-width: 104px;
+}
+
+.form-button {
+  width: auto;
+  height: 18px;
+  min-width: 26px;
+  padding: 0 5px;
+  border-color: rgba(40, 124, 99, 0.24);
+  border-radius: 999px;
+  background: rgba(40, 124, 99, 0.08);
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.form-button.active {
+  background: var(--green);
+  color: white;
 }
 
 .rarity-chip {

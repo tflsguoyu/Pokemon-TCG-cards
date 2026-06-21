@@ -1,7 +1,7 @@
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
 const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 12;
+const CACHE_VERSION = 13;
 const FETCH_TIMEOUT_MS = 15000;
 
 const NATIONAL_DEX_RANGES = {
@@ -352,6 +352,7 @@ function normalizeCandidate(card, group) {
     highImage: `${card.image}/high.webp`,
     highFallbackImage: `${card.image}/high.png`,
     source,
+    form: getCardForm(card.name),
     eraCode: getEraCode(card.set),
     ptcgoCode: getPtcgoCode(card.set),
     setId: card.set?.id || "",
@@ -409,24 +410,37 @@ function renderDexCard(mon) {
   const node = els.template.content.firstElementChild.cloneNode(true);
   const cards = state.cardsByDex.get(mon.id) || [];
   const zhName = state.zhNamesByDex.get(mon.id) || "";
+  let activeFormKey = "base";
 
   node.querySelector(".dex-number").textContent = `#${String(mon.id).padStart(4, "0")}`;
   setCardTitle(node, mon.name, zhName);
 
-  if (!cards.length) {
-    node.classList.add("empty");
-    return node;
-  }
-
   const image = node.querySelector("img");
   const rarity = node.querySelector(".rarity-chip");
   const select = node.querySelector("select");
+  const formButtons = node.querySelector(".form-buttons");
+  const forms = getCandidateForms(cards, mon);
+  if (!forms.some((form) => form.key === activeFormKey)) {
+    activeFormKey = forms[0]?.key || "base";
+  }
 
-  for (const card of cards) {
-    const option = document.createElement("option");
-    option.value = card.id;
-    option.textContent = `${card.label} · ${card.ptcgoCode || card.setId || card.setName} #${card.number}`;
-    select.appendChild(option);
+  if (forms.length > 1) {
+    for (const form of forms) {
+      const button = document.createElement("button");
+      button.className = "form-button";
+      button.type = "button";
+      button.textContent = form.shortLabel;
+      button.title = form.label;
+      button.dataset.formKey = form.key;
+      button.setAttribute("aria-pressed", String(form.key === activeFormKey));
+      if (form.key === activeFormKey) button.classList.add("active");
+      button.addEventListener("click", () => {
+        activeFormKey = form.key;
+        updateFormButtons();
+        rebuildOptions();
+      });
+      formButtons.appendChild(button);
+    }
   }
 
   const applyCard = (card) => {
@@ -442,10 +456,48 @@ function renderDexCard(mon) {
     image.onclick = () => openHighResImage(card);
   };
 
-  applyCard(cards[0]);
-  select.disabled = cards.length < 2;
+  const updateFormButtons = () => {
+    for (const button of formButtons.querySelectorAll(".form-button")) {
+      const form = forms.find((item) => item.key === button.dataset.formKey);
+      const isActive = form?.key === activeFormKey;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+    }
+  };
+
+  const getActiveCards = () => {
+    const filtered = cards.filter((card) => card.form.key === activeFormKey);
+    return filtered;
+  };
+
+  const rebuildOptions = () => {
+    const activeCards = getActiveCards();
+    select.replaceChildren();
+
+    if (!activeCards.length) {
+      node.classList.add("empty");
+      image.removeAttribute("src");
+      image.onclick = null;
+      return;
+    }
+
+    node.classList.remove("empty");
+
+    for (const card of activeCards) {
+      const option = document.createElement("option");
+      option.value = card.id;
+      option.textContent = `${card.label} · ${card.ptcgoCode || card.setId || card.setName} #${card.number}`;
+      select.appendChild(option);
+    }
+
+    select.disabled = activeCards.length < 2;
+    applyCard(activeCards[0]);
+  };
+
+  rebuildOptions();
   select.addEventListener("change", () => {
-    const selected = cards.find((card) => card.id === select.value) || cards[0];
+    const activeCards = getActiveCards();
+    const selected = activeCards.find((card) => card.id === select.value) || activeCards[0];
     applyCard(selected);
   });
 
@@ -479,6 +531,70 @@ function setCardTitle(node, englishName, zhName) {
     zh.textContent = zhName;
     title.appendChild(zh);
   }
+}
+
+function getCandidateForms(cards, mon) {
+  const formsByKey = new Map();
+  const indexedNames = window.POKEMON_FORM_NAMES?.[String(mon.id)] || [mon.name];
+
+  for (const name of indexedNames) {
+    const form = getIndexedForm(name, mon.name);
+    formsByKey.set(form.key, form);
+  }
+
+  for (const card of cards) {
+    formsByKey.set(card.form.key, card.form);
+  }
+
+  const forms = Array.from(formsByKey.values());
+  forms.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
+  return forms;
+}
+
+function getIndexedForm(name, baseName) {
+  const form = getCardForm(name);
+  if (form.key !== "base" || normalizeCardName(name) === normalizeCardName(baseName)) {
+    return form;
+  }
+
+  return {
+    key: `form-${slugify(name)}`,
+    label: name,
+    shortLabel: makeFormShortLabel(name, baseName),
+    rank: 40,
+  };
+}
+
+function getCardForm(name) {
+  const normalized = String(name || "").toLowerCase();
+  const formMatchers = [
+    { key: "alolan", label: "Alolan", shortLabel: "Alo", rank: 10, pattern: /\balolan\b/ },
+    { key: "galarian", label: "Galarian", shortLabel: "Gal", rank: 11, pattern: /\bgalarian\b/ },
+    { key: "hisuian", label: "Hisuian", shortLabel: "His", rank: 12, pattern: /\bhisuian\b/ },
+    { key: "paldean", label: "Paldean", shortLabel: "Pal", rank: 13, pattern: /\bpaldean\b/ },
+    { key: "mega-x", label: "Mega X", shortLabel: "MX", rank: 20, pattern: /\bmega\b.*\bx\b|\bm\s+[^,]+[- ]?ex\b.*\bx\b/ },
+    { key: "mega-y", label: "Mega Y", shortLabel: "MY", rank: 21, pattern: /\bmega\b.*\by\b|\bm\s+[^,]+[- ]?ex\b.*\by\b/ },
+    { key: "mega", label: "Mega", shortLabel: "M", rank: 22, pattern: /\bmega\b|\bm\s+[a-z]/ },
+    { key: "primal", label: "Primal", shortLabel: "Pri", rank: 23, pattern: /\bprimal\b/ },
+    { key: "origin", label: "Origin", shortLabel: "Ori", rank: 30, pattern: /\borigin\b/ },
+    { key: "therian", label: "Therian", shortLabel: "The", rank: 31, pattern: /\btherian\b/ },
+    { key: "sky", label: "Sky", shortLabel: "Sky", rank: 32, pattern: /\bsky forme\b/ },
+    { key: "crowned", label: "Crowned", shortLabel: "Cr", rank: 33, pattern: /\bcrowned\b/ },
+    { key: "dusk-mane", label: "Dusk Mane", shortLabel: "DM", rank: 34, pattern: /\bdusk mane\b/ },
+    { key: "dawn-wings", label: "Dawn Wings", shortLabel: "DW", rank: 35, pattern: /\bdawn wings\b/ },
+    { key: "black", label: "Black", shortLabel: "Blk", rank: 36, pattern: /\bblack kyurem\b/ },
+    { key: "white", label: "White", shortLabel: "Wht", rank: 37, pattern: /\bwhite kyurem\b/ },
+    { key: "partner", label: "Partner", shortLabel: "Par", rank: 38, pattern: /\bpartner\b/ },
+  ];
+
+  return (
+    formMatchers.find((form) => form.pattern.test(normalized)) || {
+      key: "base",
+      label: "Base",
+      shortLabel: "Std",
+      rank: 0,
+    }
+  );
 }
 
 async function mapLimit(items, limit, worker) {
@@ -533,6 +649,25 @@ function normalizeSetName(value) {
 
 function normalizeCardName(value) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function slugify(value) {
+  return normalizeCardName(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function makeFormShortLabel(name, baseName) {
+  const formPart = normalizeCardName(name)
+    .replace(normalizeCardName(baseName), "")
+    .replace(/\bforme?\b/g, "")
+    .trim();
+  const source = formPart || name;
+  return source
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
 }
 
 function getCardNumber(value) {
