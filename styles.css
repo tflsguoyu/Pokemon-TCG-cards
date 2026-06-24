@@ -305,7 +305,6 @@ h2 {
 }
 
 .dex-card.empty img,
-.dex-card.empty .variant-picker,
 .dex-card.empty .rarity-chip {
   display: none;
 }

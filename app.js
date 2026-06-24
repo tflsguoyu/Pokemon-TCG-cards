@@ -528,6 +528,10 @@ function renderDexCard(mon) {
       node.classList.add("empty");
       image.removeAttribute("src");
       image.onclick = null;
+      const option = document.createElement("option");
+      option.textContent = "暂无卡图";
+      select.appendChild(option);
+      select.disabled = true;
       return;
     }
 
