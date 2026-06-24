@@ -1,7 +1,7 @@
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
 const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 17;
+const CACHE_VERSION = 19;
 const FETCH_TIMEOUT_MS = 15000;
 
 const NATIONAL_DEX_RANGES = {
@@ -32,7 +32,7 @@ const SHINY_RARITY_GROUPS = [
 
 const EXTRA_FULL_ART_PROMOS = [
   { id: "svp-044", rank: 4, label: "Promo" },
-  { id: "svp-046", rank: 4, label: "Promo" },
+  { id: "mep-037", rank: 4, label: "Promo" },
   { id: "svp-048", rank: 4, label: "Promo" },
 ];
 
@@ -41,6 +41,8 @@ const SET_CODE_OVERRIDES = new Map([
   ["sv03.5", "MEW"],
   ["svp", "PR-SV"],
   ["SVP Black Star Promos", "PR-SV"],
+  ["mep", "MEP"],
+  ["MEP Black Star Promos", "MEP"],
 ]);
 
 const state = {
@@ -391,10 +393,10 @@ function normalizeCandidate(card, group) {
   return {
     id: card.id,
     name: card.name,
-    image: `${card.image}/low.webp`,
-    fallbackImage: `${card.image}/low.png`,
-    highImage: `${card.image}/high.webp`,
-    highFallbackImage: `${card.image}/high.png`,
+    image: card.image ? `${card.image}/low.webp` : "",
+    fallbackImage: card.image ? `${card.image}/low.png` : "",
+    highImage: card.image ? `${card.image}/high.webp` : "",
+    highFallbackImage: card.image ? `${card.image}/high.png` : "",
     source,
     form: getCardForm(card.name),
     isShiny: isShinyCard(card),
@@ -491,6 +493,15 @@ function renderDexCard(mon) {
   const applyCard = (card) => {
     setCardTitle(node, mon.name, zhName);
     rarity.textContent = card.setDisplayCode || card.eraCode || card.ptcgoCode || card.setId || card.setName;
+    if (!card.image) {
+      node.classList.add("empty");
+      image.removeAttribute("src");
+      image.alt = "";
+      image.onclick = null;
+      return;
+    }
+
+    node.classList.remove("empty");
     image.src = card.image;
     image.alt = `${card.name} ${card.source}`;
     image.onerror = () => {
