@@ -16,6 +16,7 @@ const els = {
   type: document.querySelector("#typeSelect"),
   view: document.querySelector("#viewSelect"),
   summary: document.querySelector("#summary"),
+  eraNav: document.querySelector("#eraNav"),
   seriesNav: document.querySelector("#seriesNav"),
   save: document.querySelector("#saveBtn"),
   imageDialog: document.querySelector("#imageDialog"),
@@ -173,6 +174,7 @@ function render() {
   }
 
   els.grid.replaceChildren(fragment);
+  renderEraNav(groups);
   renderSeriesNav(groups);
   updateSummary(cards.length);
 }
@@ -211,6 +213,7 @@ function renderSeriesNav(groups) {
     button.className = "series-nav-button";
     button.type = "button";
     button.dataset.seriesTone = String(index % 6);
+    button.dataset.seriesIndex = String(index);
     button.textContent = getSeriesNavLabel(firstCard);
     button.title = label;
     button.setAttribute("aria-label", label);
@@ -221,14 +224,66 @@ function renderSeriesNav(groups) {
   els.seriesNav.replaceChildren(fragment);
 }
 
-function scrollToSeries(index) {
+function renderEraNav(groups) {
+  const fragment = document.createDocumentFragment();
+  const eraItems = getEraItems(groups);
+
+  for (const item of eraItems) {
+    const button = document.createElement("button");
+    button.className = "era-nav-button";
+    button.type = "button";
+    button.textContent = `${item.era} ${item.count}`;
+    button.title = `${item.era} · ${item.count} 个系列`;
+    button.setAttribute("aria-label", button.title);
+    button.addEventListener("click", () => scrollToEra(item.firstSeriesIndex));
+    fragment.appendChild(button);
+  }
+
+  els.eraNav.replaceChildren(fragment);
+}
+
+function getEraItems(groups) {
+  const items = [];
+  const itemByEra = new Map();
+
+  groups.forEach((group, index) => {
+    const era = getMenuEraCode(group[0]) || "其他";
+    const existing = itemByEra.get(era);
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+
+    const item = { era, firstSeriesIndex: index, count: 1 };
+    itemByEra.set(era, item);
+    items.push(item);
+  });
+
+  return items;
+}
+
+function scrollToEra(firstSeriesIndex) {
+  scrollSeriesNavButtonIntoView(firstSeriesIndex, "auto");
+  scrollToSeries(firstSeriesIndex, "auto");
+}
+
+function scrollSeriesNavButtonIntoView(index, behavior = "smooth") {
+  const button = els.seriesNav.querySelector(`[data-series-index="${index}"]`);
+  if (!button) return;
+  els.seriesNav.scrollTo({
+    left: Math.max(0, button.offsetLeft - 8),
+    behavior,
+  });
+}
+
+function scrollToSeries(index, behavior = "smooth") {
   const panel = document.querySelector(`#${getSeriesPanelId(index)}`);
   if (!panel) return;
 
   const main = document.querySelector("main");
   const panelLeft = panel.offsetLeft;
   const targetLeft = Math.max(0, panelLeft - 16);
-  main.scrollTo({ left: targetLeft, behavior: "smooth" });
+  main.scrollTo({ left: targetLeft, behavior });
 }
 
 function getSeriesPanelId(index) {
