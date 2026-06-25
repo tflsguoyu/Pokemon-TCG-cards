@@ -3,26 +3,32 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PTCG 全国图鉴</title>
-    <link rel="stylesheet" href="./styles.css?v=18" />
+    <title>PTCG 全国图鉴 / National Dex</title>
+    <link rel="stylesheet" href="./styles.css?v=23" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
         <div>
           <p class="eyebrow">Pokemon TCG</p>
-          <h1>全国图鉴</h1>
+          <h1>全国图鉴 / National Dex</h1>
         </div>
       </div>
-      <section class="controls" aria-label="筛选">
+      <section class="controls" aria-label="筛选 / Filters">
         <label class="search">
-          <span>搜索</span>
-          <input id="searchInput" type="search" placeholder="编号或名字" autocomplete="off" />
+          <span class="control-label">
+            <span>搜索</span>
+            <span>Search</span>
+          </span>
+          <input id="searchInput" type="search" placeholder="编号或名字 / No. or name" autocomplete="off" />
         </label>
         <label class="select-wrap">
-          <span>世代</span>
+          <span class="control-label">
+            <span>世代</span>
+            <span>Gen</span>
+          </span>
           <select id="generationSelect">
-            <option value="all">全部</option>
+            <option value="all">全部 / All</option>
             <option value="1">Gen 1</option>
             <option value="2">Gen 2</option>
             <option value="3">Gen 3</option>
@@ -34,19 +40,50 @@
             <option value="9">Gen 9</option>
           </select>
         </label>
-        <button id="refreshDataBtn" class="refresh-btn" type="button">刷新数据</button>
       </section>
-      <div class="status" id="status">准备加载</div>
+      <div class="view-tools">
+        <div class="background-filters" aria-label="背景筛选 / Background filters">
+          <label class="background-filter">
+            <input id="contentBackgroundInput" type="checkbox" checked />
+            <span class="tool-label">
+              <span>插画卡</span>
+              <span>Illus. Art</span>
+            </span>
+          </label>
+          <label class="background-filter">
+            <input id="simpleBackgroundInput" type="checkbox" checked />
+            <span class="tool-label">
+              <span>全图卡</span>
+              <span>Full Art</span>
+            </span>
+          </label>
+        </div>
+        <label class="status-shiny">
+          <input id="shinyOnlyInput" type="checkbox" />
+          <span class="tool-label">
+            <span>闪光</span>
+            <span>Shiny</span>
+          </span>
+        </label>
+        <div class="status" id="status" aria-label="显示范围 / View mode">
+          <button id="withImagesViewBtn" class="status-filter" type="button" aria-pressed="false">
+            <span class="tool-label">
+              <span>有图 <span id="withImagesCount" class="inline-count">0</span></span>
+              <span>With images</span>
+            </span>
+          </button>
+          <button id="allViewBtn" class="status-filter active" type="button" aria-pressed="true">
+            <span class="tool-label">
+              <span>全部 <span id="totalSummaryCount" class="inline-count">0</span></span>
+              <span>Total</span>
+            </span>
+          </button>
+        </div>
+      </div>
     </header>
 
     <main>
-      <section class="summary" aria-live="polite">
-        <span id="shownCount">0</span>
-        <span> / </span>
-        <span id="totalCount">0</span>
-      </section>
-
-      <section id="dexGrid" class="dex-grid" aria-label="图鉴列表"></section>
+      <section id="dexGrid" class="dex-grid" aria-label="图鉴列表 / Dex list"></section>
     </main>
 
     <template id="dexCardTemplate">
@@ -56,21 +93,28 @@
             <div class="dex-number"></div>
             <h2></h2>
           </div>
-          <div class="form-buttons" aria-label="形态"></div>
-          <span class="rarity-chip"></span>
+          <div class="form-buttons" aria-label="形态 / Forms"></div>
         </div>
         <div class="image-stage">
           <img alt="" loading="lazy" />
-          <div class="empty-state">暂无此形态卡图</div>
+          <div class="empty-state">暂无卡图 / No image</div>
         </div>
-        <label class="variant-picker">
+        <div class="variant-picker">
           <select></select>
-        </label>
+          <button class="card-gallery-button" type="button" aria-label="候选图 / Candidate images" title="候选图 / Candidate images">
+            <span aria-hidden="true"></span>
+          </button>
+        </div>
       </article>
     </template>
 
+    <dialog id="candidateDialog" class="candidate-dialog">
+      <button id="closeCandidateDialogBtn" class="close-dialog" type="button" aria-label="关闭 / Close">×</button>
+      <div id="candidateGrid" class="candidate-grid" aria-label="候选图 / Candidate images"></div>
+    </dialog>
+
     <dialog id="imageDialog" class="image-dialog">
-      <button id="closeDialogBtn" class="close-dialog" type="button" aria-label="关闭">×</button>
+      <button id="closeDialogBtn" class="close-dialog" type="button" aria-label="关闭 / Close">×</button>
       <figure>
         <img id="dialogImage" alt="" />
         <figcaption id="dialogCaption"></figcaption>
@@ -78,6 +122,7 @@
     </dialog>
 
     <script src="./form-index.js?v=13"></script>
-    <script src="./app.js?v=19"></script>
+    <script src="./local-data.js?v=37"></script>
+    <script src="./app.js?v=39"></script>
   </body>
 </html>

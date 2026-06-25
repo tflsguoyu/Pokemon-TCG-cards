@@ -64,20 +64,134 @@ h1 {
   white-space: nowrap;
 }
 
-.status {
+.view-tools {
   justify-self: end;
-  max-width: 180px;
-  min-width: 78px;
-  padding: 8px 10px;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.tool-label {
+  display: grid;
+  gap: 1px;
+  line-height: 1.05;
+}
+
+.tool-label span:first-child,
+.tool-label span:last-child {
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.tool-label span:last-child {
+  color: color-mix(in srgb, currentColor 76%, white);
+}
+
+.background-filters {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.background-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   color: var(--muted);
-  font-size: 12px;
-  text-align: right;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.background-filter input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--green);
+}
+
+.background-filter:has(input:checked) {
+  background: rgba(40, 124, 99, 0.1);
+  color: var(--green);
+}
+
+.background-filter:has(input:disabled) {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.status {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  min-width: 166px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.status-filter {
+  display: grid;
+  gap: 1px;
+  align-content: center;
+  height: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(96, 112, 124, 0.08);
+  color: var(--muted);
+  font: inherit;
+  text-align: center;
+}
+
+.status-filter.active {
+  background: rgba(36, 107, 159, 0.12);
+  color: var(--blue);
+}
+
+.status-filter.active .tool-label span:first-child {
+  color: var(--blue);
+}
+
+.inline-count {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.status-shiny {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.status-shiny input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--blue);
+}
+
+.status-shiny:has(input:checked) {
+  background: rgba(209, 58, 48, 0.12);
+  color: var(--red);
 }
 
 main {
@@ -97,8 +211,24 @@ main {
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
+}
+
+.control-label {
+  display: grid;
+  gap: 1px;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.control-label span:first-child,
+.control-label span:last-child {
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.control-label span:last-child {
+  color: color-mix(in srgb, currentColor 76%, white);
 }
 
 .search {
@@ -109,16 +239,26 @@ main {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
-.variant-picker {
-  display: grid;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
+.controls input,
+.controls select {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.controls input::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, white);
+  font-size: 14px;
   font-weight: 700;
 }
 
 .variant-picker {
-  gap: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 input,
@@ -141,23 +281,6 @@ select {
 button {
   padding: 0 14px;
   cursor: pointer;
-}
-
-.refresh-btn {
-  width: 112px;
-  border-color: rgba(36, 107, 159, 0.28);
-  color: var(--blue);
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.summary {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 14px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
 }
 
 .dex-grid {
@@ -230,49 +353,48 @@ h2 {
 }
 
 .form-button {
+  position: relative;
   width: auto;
-  height: 18px;
-  min-width: 38px;
-  padding: 0 7px;
-  border-color: rgba(40, 124, 99, 0.24);
-  border-radius: 999px;
-  background: rgba(40, 124, 99, 0.08);
+  height: 22px;
+  min-width: 46px;
+  padding: 0 18px 0 8px;
+  border-color: rgba(40, 124, 99, 0.42);
+  border-radius: 7px;
+  background: var(--panel);
   color: var(--green);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(23, 32, 38, 0.04);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.form-button::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+  border-right: 1.8px solid currentColor;
+  border-bottom: 1.8px solid currentColor;
+  transform: translateY(-62%) rotate(45deg);
+}
+
+.form-button:hover {
+  border-color: var(--green);
+  background: rgba(40, 124, 99, 0.08);
 }
 
 .form-button.active {
   background: var(--green);
+  border-color: var(--green);
   color: white;
 }
 
-.shiny-button {
-  border-color: rgba(216, 75, 61, 0.28);
-  background: rgba(241, 200, 75, 0.22);
-  color: #8a6400;
-}
-
-.shiny-button.active {
-  background: var(--yellow);
-  color: #4b3600;
-}
-
-.rarity-chip {
-  position: absolute;
-  top: 0;
-  right: 0;
-  max-width: 68px;
-  padding: 4px 6px;
-  border-radius: 999px;
-  background: rgba(36, 107, 159, 0.12);
-  color: var(--blue);
-  font-size: 10px;
-  font-weight: 800;
-  text-align: center;
-  overflow-wrap: anywhere;
+.form-button.active::after {
+  transform: translateY(-36%) rotate(225deg);
 }
 
 .image-stage {
@@ -304,8 +426,7 @@ h2 {
   text-align: center;
 }
 
-.dex-card.empty img,
-.dex-card.empty .rarity-chip {
+.dex-card.empty img {
   display: none;
 }
 
@@ -316,6 +437,59 @@ h2 {
 .variant-picker select {
   height: 32px;
   font-size: 12px;
+}
+
+.card-gallery-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 32px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: color-mix(in srgb, var(--blue) 78%, var(--muted));
+}
+
+.card-gallery-button span,
+.card-gallery-button span::before,
+.card-gallery-button span::after {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 7px 0 0 currentColor;
+}
+
+.card-gallery-button span {
+  position: relative;
+}
+
+.card-gallery-button span::before,
+.card-gallery-button span::after {
+  content: "";
+  position: absolute;
+  left: 0;
+}
+
+.card-gallery-button span::before {
+  top: -7px;
+}
+
+.card-gallery-button span::after {
+  top: 7px;
+}
+
+.card-gallery-button:hover {
+  background: rgba(36, 107, 159, 0.08);
+  border-color: rgba(36, 107, 159, 0.12);
+  color: var(--blue);
+}
+
+.card-gallery-button:disabled {
+  opacity: 0.42;
+  cursor: default;
 }
 
 .image-dialog {
@@ -364,6 +538,51 @@ h2 {
   line-height: 1;
 }
 
+.candidate-dialog {
+  width: min(92vw, 760px);
+  max-height: 86vh;
+  padding: 18px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 28px 80px rgba(12, 20, 26, 0.34);
+}
+
+.candidate-dialog::backdrop {
+  background: rgba(13, 20, 25, 0.54);
+}
+
+.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+  max-height: calc(86vh - 36px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.candidate-card {
+  display: grid;
+  place-items: center;
+  height: auto;
+  padding: 0;
+  overflow: hidden;
+  aspect-ratio: 600 / 825;
+  border-radius: 8px;
+  background: #f3f7f8;
+}
+
+.candidate-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.candidate-card.active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(36, 107, 159, 0.18);
+}
+
 @media (max-width: 720px) {
   .topbar {
     grid-template-columns: 1fr;
@@ -376,18 +595,43 @@ h2 {
     flex-direction: column;
   }
 
+  .view-tools,
   .status {
     width: 100%;
     text-align: left;
   }
 
+  .view-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) 86px minmax(158px, 1fr);
+    align-items: stretch;
+  }
+
+  .background-filters {
+    width: 100%;
+  }
+
+  .background-filter {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .status-shiny {
+    justify-content: center;
+    padding-inline: 8px;
+  }
+
   .controls {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) 132px;
   }
 
   .dex-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+  }
+
+  .candidate-grid {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   }
 }
 

@@ -1,0 +1,501 @@
+const STORAGE_KEY = "ptcg-card-review-v1";
+const BACKGROUND_TYPES = ["content", "simple", "other"];
+
+const state = {
+  cards: [],
+  decisions: new Map(),
+  query: "",
+  type: "all",
+  view: "all",
+};
+
+const els = {
+  grid: document.querySelector("#reviewGrid"),
+  template: document.querySelector("#reviewCardTemplate"),
+  search: document.querySelector("#searchInput"),
+  type: document.querySelector("#typeSelect"),
+  view: document.querySelector("#viewSelect"),
+  summary: document.querySelector("#summary"),
+  seriesNav: document.querySelector("#seriesNav"),
+  save: document.querySelector("#saveBtn"),
+  imageDialog: document.querySelector("#imageDialog"),
+  dialogImage: document.querySelector("#dialogImage"),
+  dialogCaption: document.querySelector("#dialogCaption"),
+  closeDialog: document.querySelector("#closeDialogBtn"),
+};
+
+init();
+
+function init() {
+  state.cards = loadCards();
+  state.decisions = loadDecisions();
+  pruneStaleDecisions();
+  wireControls();
+  render();
+}
+
+function wireControls() {
+  els.search.addEventListener("input", () => {
+    state.query = els.search.value.trim().toLowerCase();
+    render();
+  });
+
+  els.type.addEventListener("change", () => {
+    state.type = els.type.value;
+    render();
+  });
+
+  els.view.addEventListener("change", () => {
+    state.view = els.view.value;
+    render();
+  });
+
+  els.save.addEventListener("click", saveResults);
+  els.closeDialog.addEventListener("click", () => els.imageDialog.close());
+  els.imageDialog.addEventListener("click", (event) => {
+    if (event.target === els.imageDialog) els.imageDialog.close();
+  });
+}
+
+function loadCards() {
+  const data = window.PTCG_LOCAL_DATA || {};
+  const zhNames = new Map((data.zhNames || []).map(([id, name]) => [Number(id), name]));
+  const cardsById = new Map();
+
+  for (const [dexId, cardList] of data.cardsByDex || []) {
+    for (const card of cardList) {
+      if (cardsById.has(card.id)) continue;
+      cardsById.set(card.id, {
+        dexId: Number(dexId),
+        zhName: zhNames.get(Number(dexId)) || "",
+        originalBackgroundType: normalizeBackgroundType(card.backgroundType),
+        ...card,
+      });
+    }
+  }
+
+  const cards = Array.from(cardsById.values());
+  cards.sort(
+    (a, b) =>
+      compareSetCode(a, b) ||
+      compareCardNumber(a, b) ||
+      a.dexId - b.dexId ||
+      BACKGROUND_TYPES.indexOf(a.originalBackgroundType) - BACKGROUND_TYPES.indexOf(b.originalBackgroundType)
+  );
+  return cards;
+}
+
+function compareSetCode(a, b) {
+  return (
+    getEraRank(a) - getEraRank(b) ||
+    String(a.eraCode || "").localeCompare(String(b.eraCode || "")) ||
+    getSetNumber(a) - getSetNumber(b) ||
+    String(a.ptcgoCode || a.setId || "").localeCompare(String(b.ptcgoCode || b.setId || ""), undefined, { numeric: true })
+  );
+}
+
+function getEraRank(card) {
+  const era = getMenuEraCode(card);
+  const ranks = ["BASE", "EX", "DP", "PL", "HGSS", "BW", "XY", "SM", "SWSH", "SV", "ME"];
+  const rank = ranks.indexOf(era);
+  return rank === -1 ? 999 : rank;
+}
+
+function getSetNumber(card) {
+  const id = String(card.setId || card.id || "").toLowerCase();
+  const popMatch = id.match(/^pop(\d+(?:\.\d+)?)/);
+  if (popMatch) return Number(popMatch[1]) / 10;
+  const match = id.match(/(?:me|sv|swsh|sm|xy|bw|dp|pl|hgss|ex|base)(\d+(?:\.\d+)?)/);
+  if (match) return Number(match[1]);
+  if (/p$/.test(id) || /promo/i.test(card.setName || "") || /^PR-/i.test(card.ptcgoCode || "")) return 999;
+  return 998;
+}
+
+function compareCardNumber(a, b) {
+  return (
+    getCardNumberPrefix(a).localeCompare(getCardNumberPrefix(b)) ||
+    getCardNumberValue(a) - getCardNumberValue(b) ||
+    String(a.number || "").localeCompare(String(b.number || ""), undefined, { numeric: true })
+  );
+}
+
+function getCardNumberPrefix(card) {
+  return String(card.number || card.printedNumber || "").split("/")[0].match(/^[A-Za-z]+/)?.[0] || "";
+}
+
+function getCardNumberValue(card) {
+  const match = String(card.number || card.printedNumber || "").split("/")[0].match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function loadDecisions() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    return new Map(Object.entries(saved.decisions || {}));
+  } catch {
+    return new Map();
+  }
+}
+
+function pruneStaleDecisions() {
+  const cardById = new Map(state.cards.map((card) => [card.id, card]));
+  for (const [cardId, decision] of state.decisions) {
+    const card = cardById.get(cardId);
+    if (!card || decision === card.originalBackgroundType) state.decisions.delete(cardId);
+  }
+  persistDecisions();
+}
+
+function persistDecisions() {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      updatedAt: new Date().toISOString(),
+      decisions: Object.fromEntries(state.decisions),
+    })
+  );
+}
+
+function render() {
+  const cards = getVisibleCards();
+  const groups = groupCardsBySeries(cards);
+  const fragment = document.createDocumentFragment();
+  let currentEra = "";
+  let seriesIndex = -1;
+
+  for (const group of groups) {
+    const firstCard = group[0];
+    const era = getMenuEraCode(firstCard);
+    const isEraStart = Boolean(currentEra && era !== currentEra);
+    currentEra = era;
+    seriesIndex += 1;
+    fragment.appendChild(renderSeriesPanel(group, { isEraStart, seriesIndex }));
+  }
+
+  els.grid.replaceChildren(fragment);
+  renderSeriesNav(groups);
+  updateSummary(cards.length);
+}
+
+function renderSeriesPanel(group, options = {}) {
+  const panel = document.createElement("section");
+  panel.className = "series-panel";
+  panel.id = getSeriesPanelId(options.seriesIndex);
+  panel.dataset.seriesTone = String((options.seriesIndex || 0) % 6);
+  panel.classList.toggle("era-start", Boolean(options.isEraStart));
+  panel.setAttribute("aria-label", getSeriesLabel(group[0]));
+
+  const label = renderSeriesLabel(group[0]);
+  const cards = document.createElement("div");
+  cards.className = "series-cards";
+
+  for (let index = 0; index < group.length; index += 1) {
+    cards.appendChild(renderCard(group[index], { seriesIndex: options.seriesIndex }));
+  }
+
+  if (group.length % 2 === 1) {
+    cards.appendChild(renderEmptySlot());
+  }
+
+  panel.append(label, cards);
+  return panel;
+}
+
+function renderSeriesNav(groups) {
+  const fragment = document.createDocumentFragment();
+
+  groups.forEach((group, index) => {
+    const firstCard = group[0];
+    const label = getSeriesLabel(firstCard);
+    const button = document.createElement("button");
+    button.className = "series-nav-button";
+    button.type = "button";
+    button.dataset.seriesTone = String(index % 6);
+    button.textContent = getSeriesNavLabel(firstCard);
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.addEventListener("click", () => scrollToSeries(index));
+    fragment.appendChild(button);
+  });
+
+  els.seriesNav.replaceChildren(fragment);
+}
+
+function scrollToSeries(index) {
+  const panel = document.querySelector(`#${getSeriesPanelId(index)}`);
+  if (!panel) return;
+
+  const main = document.querySelector("main");
+  const panelLeft = panel.offsetLeft;
+  const targetLeft = Math.max(0, panelLeft - 16);
+  main.scrollTo({ left: targetLeft, behavior: "smooth" });
+}
+
+function getSeriesPanelId(index) {
+  return `series-panel-${index}`;
+}
+
+function groupCardsBySeries(cards) {
+  const groups = [];
+  let currentKey = "";
+  let currentGroup = null;
+
+  for (const card of cards) {
+    const key = getSeriesKey(card);
+    if (key !== currentKey) {
+      currentKey = key;
+      currentGroup = [];
+      groups.push(currentGroup);
+    }
+    currentGroup.push(card);
+  }
+
+  return groups;
+}
+
+function renderSeriesLabel(card) {
+  const label = document.createElement("div");
+  label.className = "series-label";
+  label.textContent = getSeriesLabel(card);
+  label.title = getSeriesLabel(card);
+  return label;
+}
+
+function renderEmptySlot() {
+  const slot = document.createElement("div");
+  slot.className = "empty-slot";
+  slot.setAttribute("aria-hidden", "true");
+  return slot;
+}
+
+function getSeriesKey(card) {
+  return `${getEraRank(card)}-${getSetNumber(card)}-${card.setId || ""}-${card.ptcgoCode || ""}`;
+}
+
+function getSeriesLabel(card) {
+  const era = getMenuEraCode(card);
+  const code = getMenuSetCode(card);
+  const setName = card.setName || card.setId || "";
+  return [era, code, setName].filter(Boolean).join(" · ");
+}
+
+function getSeriesNavLabel(card) {
+  const era = getMenuEraCode(card);
+  const code = getMenuSetCode(card);
+  return [era, code].filter(Boolean).join(" ");
+}
+
+function getVisibleCards() {
+  return state.cards.filter((card) => {
+    const decision = getDecision(card);
+    if (state.type !== "all" && card.originalBackgroundType !== state.type) return false;
+    if (state.view === "changed" && decision === card.originalBackgroundType) return false;
+    if (state.view === "deleted" && decision !== "delete") return false;
+
+    if (!state.query) return true;
+    const text = [
+      card.dexId,
+      card.name,
+      card.zhName,
+      card.id,
+      card.setName,
+      card.ptcgoCode,
+      card.setId,
+      card.printedNumber,
+      card.label,
+      card.rarity,
+      card.originalBackgroundType,
+    ]
+      .join(" ")
+      .toLowerCase();
+    return text.includes(state.query);
+  });
+}
+
+function renderCard(card, options = {}) {
+  const node = els.template.content.firstElementChild.cloneNode(true);
+  const decision = getDecision(card);
+
+  node.dataset.cardId = card.id;
+  node.dataset.seriesTone = String((options.seriesIndex || 0) % 6);
+  node.classList.toggle("series-start", Boolean(options.isSeriesStart));
+  node.classList.toggle("era-start", Boolean(options.isEraStart));
+  if (options.isSeriesStart) {
+    node.title = getSeriesLabel(card);
+  }
+  node.classList.toggle("marked-content", decision === "content");
+  node.classList.toggle("marked-simple", decision === "simple");
+  node.classList.toggle("marked-other", decision === "other");
+  node.classList.toggle("marked-delete", decision === "delete");
+  node.querySelector(".dex-number").textContent = `#${String(card.dexId).padStart(4, "0")}`;
+  node.querySelector("h2").textContent = card.zhName ? `${card.name} / ${card.zhName}` : card.name;
+  node.querySelector(".card-code").textContent = formatCardCode(card);
+  node.querySelector(".status-pill").textContent = getDecisionLabel(decision);
+
+  const imageButton = node.querySelector(".image-button");
+  const image = node.querySelector("img");
+  const imageUrl = getImageUrl(card);
+  if (imageUrl) {
+    image.src = imageUrl;
+    image.alt = `${card.name} ${formatCardCode(card)}`;
+    imageButton.addEventListener("click", () => openImage(card));
+  } else {
+    imageButton.classList.add("empty");
+  }
+
+  for (const button of node.querySelectorAll(".choice")) {
+    const action = button.dataset.action;
+    button.classList.toggle("active", decision === action);
+    button.addEventListener("click", () => setDecision(card, action));
+  }
+
+  return node;
+}
+
+function setDecision(card, action) {
+  if (action === card.originalBackgroundType) {
+    state.decisions.delete(card.id);
+  } else {
+    state.decisions.set(card.id, action);
+  }
+  persistDecisions();
+  render();
+}
+
+function getDecision(card) {
+  return state.decisions.get(card.id) || card.originalBackgroundType;
+}
+
+function getDecisionLabel(decision) {
+  if (decision === "content") return "内容";
+  if (decision === "simple") return "简单";
+  if (decision === "other") return "其他";
+  if (decision === "delete") return "删除";
+  return decision;
+}
+
+function updateSummary(visibleCount) {
+  const counts = countCards(state.cards, (card) => card.originalBackgroundType);
+  const decisionCounts = countCards(Array.from(state.decisions.values()), (value) => value);
+  els.summary.textContent =
+    `显示 ${visibleCount} / 全部 ${state.cards.length}` +
+    ` / C ${counts.content || 0}` +
+    ` / S ${counts.simple || 0}` +
+    ` / O ${counts.other || 0}` +
+    ` / 已改 ${state.decisions.size}` +
+    ` / 删除 ${decisionCounts.delete || 0}`;
+}
+
+function countCards(items, getKey) {
+  const counts = {};
+  for (const item of items) {
+    const key = getKey(item);
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
+
+async function saveResults() {
+  const payload = buildResultsPayload();
+  const json = `${JSON.stringify(payload, null, 2)}\n`;
+  const filename = `ptcg-review-${new Date().toISOString().slice(0, 10)}.json`;
+
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      return;
+    } catch (error) {
+      if (error.name === "AbortError") return;
+    }
+  }
+
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildResultsPayload() {
+  const decisions = Object.fromEntries(state.decisions);
+  return {
+    source: "unified-card-review",
+    generatedAt: new Date().toISOString(),
+    totalCards: state.cards.length,
+    decisions,
+    contentIds: filterDecisionIds(decisions, "content"),
+    simpleIds: filterDecisionIds(decisions, "simple"),
+    otherIds: filterDecisionIds(decisions, "other"),
+    deleteIds: filterDecisionIds(decisions, "delete"),
+  };
+}
+
+function filterDecisionIds(decisions, action) {
+  return Object.entries(decisions)
+    .filter(([, value]) => value === action)
+    .map(([cardId]) => cardId);
+}
+
+function openImage(card) {
+  const imageUrl = getImageUrl(card);
+  if (!imageUrl) return;
+  els.dialogImage.src = imageUrl;
+  els.dialogImage.alt = `${card.name} ${formatCardCode(card)}`;
+  els.dialogCaption.textContent = `${card.name} · ${formatCardCode(card)}`;
+  els.imageDialog.showModal();
+}
+
+function getImageUrl(card) {
+  const source = (card.imageSources || []).find((item) => item.low || item.high);
+  return source?.low || source?.high || card.image || "";
+}
+
+function formatCardCode(card) {
+  const language = card.language || "EN";
+  const era = getMenuEraCode(card);
+  const setCode = getMenuSetCode(card);
+  const number = getMenuCardNumber(card);
+  return `[${language}] ${[era, setCode, number].filter(Boolean).join("-")} · ${card.label} · ${card.originalBackgroundType}`;
+}
+
+function getMenuEraCode(card) {
+  const id = String(card.setId || card.id || "").toLowerCase();
+  if (card.eraCode) return card.eraCode;
+  if (id.startsWith("pop")) return "DP";
+  if (id.startsWith("me")) return "ME";
+  if (id.startsWith("sv")) return "SV";
+  if (id.startsWith("swsh")) return "SWSH";
+  if (id.startsWith("sm")) return "SM";
+  if (id.startsWith("xy")) return "XY";
+  if (id.startsWith("bw")) return "BW";
+  if (id.startsWith("dp")) return "DP";
+  if (id.startsWith("pl")) return "PL";
+  if (id.startsWith("hgss")) return "HGSS";
+  if (id.startsWith("ex")) return "EX";
+  if (id.startsWith("base")) return "BASE";
+  return card.setDisplayCode || "";
+}
+
+function getMenuSetCode(card) {
+  const ptcgoCode = String(card.ptcgoCode || "").trim();
+  if (card.label === "Promo" || /^PR-/i.test(ptcgoCode)) return "PROMO";
+  const code = ptcgoCode || card.setDisplayCode || card.setId || card.setName || "";
+  return String(code).toUpperCase();
+}
+
+function getMenuCardNumber(card) {
+  const number = String(card.number || card.printedNumber || "").split("/")[0];
+  return /^\d+$/.test(number) ? String(Number(number)) : number;
+}
+
+function normalizeBackgroundType(value) {
+  return BACKGROUND_TYPES.includes(value) ? value : "other";
+}

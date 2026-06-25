@@ -1,8 +1,4 @@
-const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
-const POKEAPI_SPECIES = "https://pokeapi.co/api/v2/pokemon-species?limit=1300";
-const CACHE_KEY = "ptcg-dex-cache-v2";
-const CACHE_VERSION = 19;
-const FETCH_TIMEOUT_MS = 15000;
+const CACHE_VERSION = 31;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -16,42 +12,20 @@ const NATIONAL_DEX_RANGES = {
   9: [906, 1025],
 };
 
-const RARITY_GROUPS = [
-  { rarity: "Illustration rare", rank: 1, label: "IR" },
-  { rarity: "Special illustration rare", rank: 2, label: "SIR" },
-];
-
-const SHINY_RARITY_GROUPS = [
-  { rarity: "One Shiny", rank: 5, label: "Shiny" },
-  { rarity: "Two Shiny", rank: 5, label: "Shiny" },
-  { rarity: "Shiny rare", rank: 5, label: "Shiny" },
-  { rarity: "Shiny rare V", rank: 5, label: "Shiny V" },
-  { rarity: "Shiny rare VMAX", rank: 5, label: "Shiny VMAX" },
-  { rarity: "Shiny Ultra Rare", rank: 5, label: "Shiny" },
-];
-
-const EXTRA_FULL_ART_PROMOS = [
-  { id: "svp-044", rank: 4, label: "Promo" },
-  { id: "mep-037", rank: 4, label: "Promo" },
-  { id: "svp-048", rank: 4, label: "Promo" },
-];
-
-const SET_CODE_OVERRIDES = new Map([
-  ["151", "MEW"],
-  ["sv03.5", "MEW"],
-  ["svp", "PR-SV"],
-  ["SVP Black Star Promos", "PR-SV"],
-  ["mep", "MEP"],
-  ["MEP Black Star Promos", "MEP"],
-]);
-
 const state = {
   species: [],
   zhNamesByDex: new Map(),
   ptcgoCodesBySetName: new Map(),
+  setReleaseDatesBySetId: new Map(),
   cardsByDex: new Map(),
   query: "",
   generation: "all",
+  viewMode: "all",
+  shinyOnly: false,
+  backgroundFilters: {
+    content: true,
+    simple: true,
+  },
 };
 
 const els = {
@@ -60,13 +34,20 @@ const els = {
   status: document.querySelector("#status"),
   search: document.querySelector("#searchInput"),
   generation: document.querySelector("#generationSelect"),
-  refreshDataBtn: document.querySelector("#refreshDataBtn"),
-  shownCount: document.querySelector("#shownCount"),
-  totalCount: document.querySelector("#totalCount"),
+  withImagesViewBtn: document.querySelector("#withImagesViewBtn"),
+  allViewBtn: document.querySelector("#allViewBtn"),
+  shinyOnly: document.querySelector("#shinyOnlyInput"),
+  contentBackground: document.querySelector("#contentBackgroundInput"),
+  simpleBackground: document.querySelector("#simpleBackgroundInput"),
+  withImagesCount: document.querySelector("#withImagesCount"),
+  totalSummaryCount: document.querySelector("#totalSummaryCount"),
   imageDialog: document.querySelector("#imageDialog"),
   dialogImage: document.querySelector("#dialogImage"),
   dialogCaption: document.querySelector("#dialogCaption"),
   closeDialogBtn: document.querySelector("#closeDialogBtn"),
+  candidateDialog: document.querySelector("#candidateDialog"),
+  candidateGrid: document.querySelector("#candidateGrid"),
+  closeCandidateDialogBtn: document.querySelector("#closeCandidateDialogBtn"),
 };
 
 init();
@@ -74,32 +55,14 @@ init();
 async function init() {
   wireControls();
 
-  if (restoreCache()) {
+  if (restoreLocalData()) {
     render();
-    setStatus(`缓存 ${state.cardsByDex.size}`);
+    setStatus(`本地 ${state.cardsByDex.size} / Local`);
     return;
   }
 
-  setStatus("加载全国图鉴");
-
-  const species = await loadSpecies();
-  state.species = species;
   render();
-
-  setStatus("加载系列");
-  const ptcgoCodesBySetName = await loadPtcgoCodes();
-  state.ptcgoCodesBySetName = ptcgoCodesBySetName;
-
-  try {
-    await loadCardCandidates();
-  } catch {
-    setStatus("卡牌加载失败");
-  }
-
-  render();
-  setStatus(`已加载 ${state.cardsByDex.size}`);
-  await loadChineseNames(species);
-  saveCache();
+  setStatus("本地数据缺失 / Missing local data");
 }
 
 function wireControls() {
@@ -113,9 +76,29 @@ function wireControls() {
     render();
   });
 
-  els.refreshDataBtn.addEventListener("click", () => {
-    localStorage.removeItem(CACHE_KEY);
-    window.location.reload();
+  els.withImagesViewBtn.addEventListener("click", () => {
+    state.viewMode = "with-images";
+    render();
+  });
+
+  els.allViewBtn.addEventListener("click", () => {
+    state.viewMode = "all";
+    render();
+  });
+
+  els.shinyOnly.addEventListener("change", () => {
+    state.shinyOnly = els.shinyOnly.checked;
+    render();
+  });
+
+  els.contentBackground.addEventListener("change", () => {
+    state.backgroundFilters.content = els.contentBackground.checked;
+    render();
+  });
+
+  els.simpleBackground.addEventListener("change", () => {
+    state.backgroundFilters.simple = els.simpleBackground.checked;
+    render();
   });
 
   els.closeDialogBtn.addEventListener("click", () => {
@@ -125,302 +108,29 @@ function wireControls() {
   els.imageDialog.addEventListener("click", (event) => {
     if (event.target === els.imageDialog) els.imageDialog.close();
   });
-}
 
-function restoreCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return false;
-
-    const cache = JSON.parse(raw);
-    if (cache.version !== CACHE_VERSION) return false;
-
-    state.species = cache.species || [];
-    state.zhNamesByDex = new Map((cache.zhNames || []).map(([id, name]) => [Number(id), name]));
-    state.ptcgoCodesBySetName = new Map(cache.ptcgoCodesBySetName || []);
-    state.cardsByDex = new Map(
-      (cache.cardsByDex || []).map(([id, cards]) => [Number(id), cards])
-    );
-
-    return state.species.length > 0 && state.cardsByDex.size > 0;
-  } catch {
-    localStorage.removeItem(CACHE_KEY);
-    return false;
-  }
-}
-
-function saveCache() {
-  try {
-    localStorage.setItem(
-      CACHE_KEY,
-      JSON.stringify({
-        version: CACHE_VERSION,
-        savedAt: new Date().toISOString(),
-        species: state.species,
-        zhNames: Array.from(state.zhNamesByDex.entries()),
-        ptcgoCodesBySetName: Array.from(state.ptcgoCodesBySetName.entries()),
-        cardsByDex: Array.from(state.cardsByDex.entries()),
-      })
-    );
-  } catch {
-    setStatus("已加载完成，但本地缓存空间不足");
-  }
-}
-
-async function loadPtcgoCodes() {
-  try {
-    const payload = await fetchJson("https://api.pokemontcg.io/v2/sets", { data: [] });
-    return new Map(
-      (payload.data || [])
-        .filter((set) => set.name && set.ptcgoCode)
-        .map((set) => [normalizeSetName(set.name), set.ptcgoCode])
-    );
-  } catch {
-    return new Map();
-  }
-}
-
-async function loadSpecies() {
-  try {
-    const payload = await fetchJson(POKEAPI_SPECIES, { results: [] });
-    return payload.results
-      .map((item) => {
-        const id = Number(item.url.match(/pokemon-species\/(\d+)\//)?.[1]);
-        return { id, name: titleCase(item.name) };
-      })
-      .filter((item) => item.id && item.id <= 1025)
-      .sort((a, b) => a.id - b.id);
-  } catch {
-    return [];
-  }
-}
-
-async function loadChineseNames(species) {
-  if (!species.length) return;
-  setStatus("补充中文名");
-
-  let loaded = 0;
-  await mapLimit(species, 18, async (mon) => {
-    const zhName = await fetchChineseName(mon.id);
-    loaded += 1;
-    if (zhName) state.zhNamesByDex.set(mon.id, zhName);
-    if (loaded % 80 === 0) {
-      setStatus(`补充中文名 ${loaded}/${species.length}`);
-      render();
-    }
+  els.closeCandidateDialogBtn.addEventListener("click", () => {
+    els.candidateDialog.close();
   });
 
-  render();
-  setStatus(`完成 ${state.cardsByDex.size}`);
-}
-
-async function fetchChineseName(id) {
-  try {
-    const payload = await fetchJson(`https://pokeapi.co/api/v2/pokemon-species/${id}`, { names: [] });
-    const names = payload.names || [];
-    return (
-      names.find((entry) => entry.language?.name === "zh-hans")?.name ||
-      names.find((entry) => entry.language?.name === "zh-hant")?.name ||
-      names.find((entry) => entry.language?.name === "zh-Hans")?.name ||
-      names.find((entry) => entry.language?.name === "zh-Hant")?.name ||
-      ""
-    );
-  } catch {
-    return "";
-  }
-}
-
-async function loadCardCandidates() {
-  let loaded = 0;
-
-  for (const group of RARITY_GROUPS) {
-    const seen = new Set();
-    setStatus(`加载 ${group.label}`);
-    const cards = await fetchCardsByRarity(group.rarity);
-    const pokemonCards = cards.filter((card) => card.image);
-
-    await mapLimit(pokemonCards, 12, async (brief) => {
-      if (seen.has(brief.id)) return;
-      seen.add(brief.id);
-
-      const detail = await fetchCardDetail(brief.id);
-      loaded += 1;
-      if (loaded % 40 === 0) setStatus(`整理候选卡 ${loaded}`);
-
-      if (!isEligiblePhysicalPokemonCard(detail) || detail.rarity !== group.rarity) {
-        return;
-      }
-
-      for (const dexId of detail.dexId) {
-        if (!Number.isInteger(dexId) || dexId > 1025) continue;
-        addCandidate(dexId, normalizeCandidate(detail, group));
-      }
-    });
-  }
-
-  for (const group of SHINY_RARITY_GROUPS) {
-    const seen = new Set();
-    setStatus(`加载 ${group.label}`);
-    const cards = await fetchCardsByRarity(group.rarity);
-    const pokemonCards = cards.filter((card) => card.image);
-
-    await mapLimit(pokemonCards, 12, async (brief) => {
-      if (seen.has(brief.id)) return;
-      seen.add(brief.id);
-
-      const detail = await fetchCardDetail(brief.id);
-      if (!isEligiblePhysicalPokemonCard(detail) || detail.rarity !== group.rarity) {
-        return;
-      }
-
-      for (const dexId of detail.dexId) {
-        if (!Number.isInteger(dexId) || dexId > 1025) continue;
-        addCandidate(dexId, normalizeCandidate(detail, group));
-      }
-    });
-  }
-
-  await loadAlternateFullArtCandidates();
-
-  for (const promo of EXTRA_FULL_ART_PROMOS) {
-    const detail = await fetchCardDetail(promo.id);
-    if (!isEligiblePhysicalPokemonCard(detail)) continue;
-
-    for (const dexId of detail.dexId) {
-      if (!Number.isInteger(dexId) || dexId > 1025) continue;
-      addCandidate(dexId, normalizeCandidate(detail, promo));
-    }
-  }
-}
-
-async function loadAlternateFullArtCandidates() {
-  setStatus("加载 Alt Art");
-  const cards = await fetchCardsByRarity("Ultra Rare");
-  const details = [];
-
-  await mapLimit(cards.filter((card) => card.image), 12, async (brief) => {
-    const detail = await fetchCardDetail(brief.id);
-    if (
-      isEligiblePhysicalPokemonCard(detail) &&
-      detail.rarity === "Ultra Rare" &&
-      detail.set?.id?.startsWith("swsh") &&
-      /^\d+$/.test(String(detail.localId || ""))
-    ) {
-      details.push(detail);
-    }
+  els.candidateDialog.addEventListener("click", (event) => {
+    if (event.target === els.candidateDialog) els.candidateDialog.close();
   });
-
-  const groups = new Map();
-  for (const detail of details) {
-    const key = `${detail.set?.id || ""}:${normalizeCardName(detail.name)}`;
-    const group = groups.get(key) || [];
-    group.push(detail);
-    groups.set(key, group);
-  }
-
-  for (const group of groups.values()) {
-    if (group.length < 2) continue;
-    group.sort((a, b) => getCardNumber(a.localId) - getCardNumber(b.localId));
-    for (const detail of group.slice(-1)) {
-      for (const dexId of detail.dexId) {
-        if (!Number.isInteger(dexId) || dexId > 1025) continue;
-        addCandidate(dexId, normalizeCandidate(detail, { rank: 3, label: "Alt Art" }));
-      }
-    }
-  }
 }
 
-function addCandidate(dexId, candidate) {
-  const existing = state.cardsByDex.get(dexId) || [];
-  if (!existing.some((card) => card.id === candidate.id)) {
-    existing.push(candidate);
-    existing.sort(compareCandidate);
-    state.cardsByDex.set(dexId, existing);
-  }
-}
+function restoreLocalData() {
+  const data = window.PTCG_LOCAL_DATA;
+  if (!data || data.version !== CACHE_VERSION) return false;
 
-function isEligiblePhysicalPokemonCard(card) {
-  return Boolean(
-    card &&
-      card.category === "Pokemon" &&
-      Array.isArray(card.dexId) &&
-      !isTcgPocketSet(card.set)
+  state.species = data.species || [];
+  state.zhNamesByDex = new Map((data.zhNames || []).map(([id, name]) => [Number(id), name]));
+  state.ptcgoCodesBySetName = new Map(data.ptcgoCodesBySetName || []);
+  state.setReleaseDatesBySetId = new Map(data.setReleaseDates || []);
+  state.cardsByDex = new Map(
+    (data.cardsByDex || []).map(([id, cards]) => [Number(id), cards])
   );
-}
 
-function isTcgPocketSet(set) {
-  const id = String(set?.id || "");
-  return /^A\d/i.test(id) || id.toLowerCase().startsWith("tcgp");
-}
-
-async function fetchCardsByRarity(rarity) {
-  const url = `${TCGDEX_BASE}/cards?rarity=${encodeURIComponent(rarity)}`;
-  return fetchJson(url, []);
-}
-
-async function fetchCardDetail(id) {
-  try {
-    return fetchJson(`${TCGDEX_BASE}/cards/${id}`, null);
-  } catch {
-    return null;
-  }
-}
-
-async function fetchJson(url, fallback) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) return fallback;
-    return response.json();
-  } catch {
-    return fallback;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-function normalizeCandidate(card, group) {
-  const source = [
-    card.set?.name,
-    card.localId ? `#${card.localId}` : "",
-    card.rarity,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return {
-    id: card.id,
-    name: card.name,
-    image: card.image ? `${card.image}/low.webp` : "",
-    fallbackImage: card.image ? `${card.image}/low.png` : "",
-    highImage: card.image ? `${card.image}/high.webp` : "",
-    highFallbackImage: card.image ? `${card.image}/high.png` : "",
-    source,
-    form: getCardForm(card.name),
-    isShiny: isShinyCard(card),
-    eraCode: getEraCode(card.set),
-    setDisplayCode: getSetDisplayCode(card.set),
-    ptcgoCode: getPtcgoCode(card.set),
-    setId: card.set?.id || "",
-    setName: card.set?.name || "",
-    number: card.localId || "",
-    printedNumber: getPrintedNumber(card),
-    rarity: card.rarity || group.rarity,
-    label: group.label,
-    rank: group.rank,
-    updated: card.updated || "",
-  };
-}
-
-function compareCandidate(a, b) {
-  return (
-    a.rank - b.rank ||
-    String(b.updated).localeCompare(String(a.updated)) ||
-    a.setName.localeCompare(b.setName) ||
-    String(a.number).localeCompare(String(b.number), undefined, { numeric: true })
-  );
+  return state.species.length > 0 && state.cardsByDex.size > 0;
 }
 
 function render() {
@@ -433,11 +143,34 @@ function render() {
   }
 
   els.grid.appendChild(fragment);
-  els.shownCount.textContent = species.length;
-  els.totalCount.textContent = state.species.length;
+  updateSummary();
+}
+
+function updateSummary() {
+  const scopedSpecies = getScopedSpecies();
+  const withImages = scopedSpecies.filter((mon) => hasVisibleCardImage(mon.id)).length;
+  els.withImagesCount.textContent = withImages;
+  els.totalSummaryCount.textContent = scopedSpecies.length;
+  els.withImagesViewBtn.classList.toggle("active", state.viewMode === "with-images");
+  els.allViewBtn.classList.toggle("active", state.viewMode === "all");
+  els.withImagesViewBtn.setAttribute("aria-pressed", String(state.viewMode === "with-images"));
+  els.allViewBtn.setAttribute("aria-pressed", String(state.viewMode === "all"));
+  els.shinyOnly.checked = state.shinyOnly;
+  els.contentBackground.checked = state.backgroundFilters.content;
+  els.simpleBackground.checked = state.backgroundFilters.simple;
+  els.contentBackground.disabled = state.shinyOnly;
+  els.simpleBackground.disabled = state.shinyOnly;
 }
 
 function getRenderableSpecies() {
+  const scopedSpecies = getScopedSpecies();
+  if (state.viewMode === "with-images") {
+    return scopedSpecies.filter((mon) => hasVisibleCardImage(mon.id));
+  }
+  return scopedSpecies;
+}
+
+function getScopedSpecies() {
   const [start, end] = state.generation === "all" ? [1, 1025] : NATIONAL_DEX_RANGES[state.generation];
   const base = state.species.length
     ? state.species
@@ -448,33 +181,63 @@ function getRenderableSpecies() {
     const zhName = state.zhNamesByDex.get(mon.id) || "";
     const inRange = mon.id >= start && mon.id <= end;
     const queryText = `${mon.id} ${mon.name} ${zhName} ${(state.cardsByDex.get(mon.id) || [])
-      .map((card) => `${card.name} ${card.source}`)
+      .map((card) => `${card.name} ${getCardSourceLabel(card)} ${card.setName} ${card.ptcgoCode} ${card.printedNumber}`)
       .join(" ")}`.toLowerCase();
     const matchesQuery = !state.query || queryText.includes(state.query);
     return inRange && matchesQuery;
   });
 }
 
+function hasVisibleCardImage(dexId) {
+  return state.shinyOnly ? hasShinyCardImage(dexId) : hasFilteredCardImage(dexId);
+}
+
+function hasFilteredCardImage(dexId) {
+  return (state.cardsByDex.get(dexId) || []).some(
+    (card) => isCardVisibleByBackground(card) && getImageUrls(card, "low").length > 0
+  );
+}
+
+function hasShinyCardImage(dexId) {
+  return (state.cardsByDex.get(dexId) || []).some((card) => card.isShiny && getImageUrls(card, "low").length > 0);
+}
+
+function isCardVisibleByBackground(card) {
+  const backgroundType = getStoredBackgroundType(card);
+  if (backgroundType === "content") return state.backgroundFilters.content;
+  if (backgroundType === "simple") return state.backgroundFilters.simple;
+  return false;
+}
+
+function getStoredBackgroundType(card) {
+  if (card.backgroundType) return card.backgroundType;
+  const label = String(card.label || "").toLowerCase();
+  const rarity = String(card.rarity || "").toLowerCase();
+  if (label === "fa" || rarity === "ultra rare") return "simple";
+  if (["ir", "sir", "promo"].includes(label) || rarity.includes("illustration")) return "content";
+  return "other";
+}
+
 function renderDexCard(mon) {
   const node = els.template.content.firstElementChild.cloneNode(true);
   const cards = state.cardsByDex.get(mon.id) || [];
   const zhName = state.zhNamesByDex.get(mon.id) || "";
-  let activeFormKey = "base";
+  let activeFormKey = state.shinyOnly ? "shiny" : "base";
 
   node.querySelector(".dex-number").textContent = `#${String(mon.id).padStart(4, "0")}`;
   setCardTitle(node, mon.name, zhName);
 
   const image = node.querySelector("img");
-  const rarity = node.querySelector(".rarity-chip");
   const select = node.querySelector("select");
+  const galleryButton = node.querySelector(".card-gallery-button");
   const formButtons = node.querySelector(".form-buttons");
   const forms = getCandidateForms(cards, mon);
+  let selectedCardId = "";
 
   if (forms.length) {
     for (const form of forms) {
       const button = document.createElement("button");
       button.className = "form-button";
-      if (form.key === "shiny") button.classList.add("shiny-button");
       button.type = "button";
       button.textContent = form.shortLabel;
       button.title = form.label;
@@ -483,6 +246,7 @@ function renderDexCard(mon) {
       if (form.key === activeFormKey) button.classList.add("active");
       button.addEventListener("click", () => {
         activeFormKey = activeFormKey === form.key ? "base" : form.key;
+        selectedCardId = "";
         updateFormButtons();
         rebuildOptions();
       });
@@ -492,8 +256,8 @@ function renderDexCard(mon) {
 
   const applyCard = (card) => {
     setCardTitle(node, mon.name, zhName);
-    rarity.textContent = card.setDisplayCode || card.eraCode || card.ptcgoCode || card.setId || card.setName;
-    if (!card.image) {
+    const imageUrls = getImageUrls(card, "low");
+    if (!imageUrls.length) {
       node.classList.add("empty");
       image.removeAttribute("src");
       image.alt = "";
@@ -502,11 +266,14 @@ function renderDexCard(mon) {
     }
 
     node.classList.remove("empty");
-    image.src = card.image;
-    image.alt = `${card.name} ${card.source}`;
-    image.onerror = () => {
-      if (image.src !== card.fallbackImage) image.src = card.fallbackImage;
-    };
+    selectedCardId = card.id;
+    image.alt = `${card.name} ${getCardSourceLabel(card)}`;
+    applyImageUrls(image, imageUrls, () => {
+      node.classList.add("empty");
+      image.removeAttribute("src");
+      image.alt = "";
+      image.onclick = null;
+    });
     image.onclick = () => openHighResImage(card);
   };
 
@@ -520,43 +287,50 @@ function renderDexCard(mon) {
   };
 
   const getActiveCards = () => {
+    if (state.shinyOnly) {
+      return sortCardsForMenu(cards.filter((card) => card.isShiny));
+    }
+
     if (activeFormKey === "base") {
-      return cards.filter((card) => card.form.key === "base" && !card.isShiny);
+      return sortCardsForMenu(cards.filter((card) => card.form.key === "base" && isCardVisibleByBackground(card)));
     }
 
     if (activeFormKey === "shiny") {
-      return cards.filter((card) => card.isShiny);
+      return sortCardsForMenu(cards.filter((card) => card.isShiny));
     }
 
-    return cards.filter((card) => card.form.key === activeFormKey && !card.isShiny);
+    return sortCardsForMenu(cards.filter((card) => card.form.key === activeFormKey && isCardVisibleByBackground(card)));
   };
 
   const rebuildOptions = () => {
     const activeCards = getActiveCards();
     select.replaceChildren();
+    galleryButton.disabled = activeCards.length < 2;
 
     if (!activeCards.length) {
       node.classList.add("empty");
       image.removeAttribute("src");
       image.onclick = null;
       const option = document.createElement("option");
-      option.textContent = "暂无卡图";
+      option.textContent = "暂无卡图 / No image";
       select.appendChild(option);
       select.disabled = true;
       return;
     }
 
     node.classList.remove("empty");
+    const selectedCard = activeCards.find((card) => card.id === selectedCardId) || activeCards[0];
 
     for (const card of activeCards) {
       const option = document.createElement("option");
       option.value = card.id;
-      option.textContent = `${card.label} · ${card.ptcgoCode || card.setId || card.setName} ${card.printedNumber}`;
+      option.textContent = formatCardOptionLabel(card);
       select.appendChild(option);
     }
 
     select.disabled = activeCards.length < 2;
-    applyCard(activeCards[0]);
+    select.value = selectedCard.id;
+    applyCard(selectedCard);
   };
 
   rebuildOptions();
@@ -565,20 +339,177 @@ function renderDexCard(mon) {
     const selected = activeCards.find((card) => card.id === select.value) || activeCards[0];
     applyCard(selected);
   });
+  galleryButton.addEventListener("click", () => {
+    const activeCards = getActiveCards();
+    if (activeCards.length < 2) return;
+    openCandidateDialog(activeCards, selectedCardId, (card) => {
+      selectedCardId = card.id;
+      select.value = card.id;
+      applyCard(card);
+    });
+  });
 
   return node;
 }
 
+function openCandidateDialog(cards, selectedCardId, onSelect) {
+  els.candidateGrid.replaceChildren();
+  const fragment = document.createDocumentFragment();
+
+  for (const card of cards) {
+    const imageUrls = getImageUrls(card, "low");
+    if (!imageUrls.length) continue;
+
+    const button = document.createElement("button");
+    button.className = "candidate-card";
+    button.type = "button";
+    button.classList.toggle("active", card.id === selectedCardId);
+    button.setAttribute("aria-label", formatCardOptionLabel(card));
+
+    const image = document.createElement("img");
+    image.alt = "";
+    image.loading = "lazy";
+    applyImageUrls(image, imageUrls);
+    button.appendChild(image);
+
+    button.addEventListener("click", () => {
+      onSelect(card);
+      els.candidateDialog.close();
+    });
+
+    fragment.appendChild(button);
+  }
+
+  els.candidateGrid.appendChild(fragment);
+  els.candidateDialog.showModal();
+}
+
+function sortCardsForMenu(cards) {
+  return [...cards].sort(compareCardsByRelease);
+}
+
+function compareCardsByRelease(a, b) {
+  const releaseDiff = getCardReleaseTime(b) - getCardReleaseTime(a);
+  if (releaseDiff) return releaseDiff;
+
+  const numberDiff = getSortableCardNumber(b) - getSortableCardNumber(a);
+  if (numberDiff) return numberDiff;
+
+  return String(a.id || "").localeCompare(String(b.id || ""), undefined, { numeric: true });
+}
+
+function getCardReleaseTime(card) {
+  const releaseDate = card.releaseDate || state.setReleaseDatesBySetId.get(card.setId) || "";
+  const time = Date.parse(releaseDate);
+  return Number.isFinite(time) ? time : 0;
+}
+
+function getSortableCardNumber(card) {
+  const raw = String(card.number || card.printedNumber || "");
+  const match = raw.match(/\d+/);
+  return match ? Number(match[0]) : -1;
+}
+
 function openHighResImage(card) {
-  els.dialogImage.src = card.highImage;
-  els.dialogImage.alt = `${card.name} ${card.source}`;
-  els.dialogImage.onerror = () => {
-    if (els.dialogImage.src !== card.highFallbackImage) {
-      els.dialogImage.src = card.highFallbackImage;
-    }
-  };
-  els.dialogCaption.textContent = `${card.name} · ${card.source}`;
+  const imageUrls = getImageUrls(card, "high");
+  applyImageUrls(els.dialogImage, imageUrls);
+  els.dialogImage.alt = `${card.name} ${getCardSourceLabel(card)}`;
+  els.dialogCaption.textContent = `${card.name} · ${getCardSourceLabel(card)}`;
   els.imageDialog.showModal();
+}
+
+function getCardSourceLabel(card) {
+  if (card.source) return card.source;
+  return [card.setName, card.printedNumber ? `#${card.printedNumber}` : "", card.rarity].filter(Boolean).join(" · ");
+}
+
+function formatCardOptionLabel(card) {
+  const language = card.language || "EN";
+  const era = getMenuEraCode(card);
+  const setCode = getMenuSetCode(card);
+  const number = getMenuCardNumber(card);
+  return `[${language}] ${[era, setCode, number].filter(Boolean).join("-")}`;
+}
+
+function getMenuEraCode(card) {
+  const id = String(card.setId || card.id || "").toLowerCase();
+  if (card.eraCode) return card.eraCode;
+  if (id.startsWith("me")) return "ME";
+  if (id.startsWith("sv")) return "SV";
+  if (id.startsWith("swsh")) return "SWSH";
+  if (id.startsWith("sm")) return "SM";
+  if (id.startsWith("xy")) return "XY";
+  if (id.startsWith("bw")) return "BW";
+  if (id.startsWith("dp")) return "DP";
+  if (id.startsWith("pl")) return "PL";
+  if (id.startsWith("hgss")) return "HGSS";
+  if (id.startsWith("ex")) return "EX";
+  if (id.startsWith("base")) return "BASE";
+  return card.setDisplayCode || "";
+}
+
+function getMenuSetCode(card) {
+  const ptcgoCode = String(card.ptcgoCode || "").trim();
+  if (card.label === "Promo" || /^PR-/i.test(ptcgoCode)) return "PROMO";
+  return ptcgoCode || card.setDisplayCode || card.setId || card.setName || "";
+}
+
+function getMenuCardNumber(card) {
+  const number = String(card.number || card.printedNumber || "").split("/")[0];
+  return /^\d+$/.test(number) ? String(Number(number)) : number;
+}
+
+function getImageUrls(card, size) {
+  const sources = getLocalImageSources(card) || [];
+
+  const urls = [];
+  for (const source of sources) {
+    if (size === "high") {
+      urls.push(source.high, source.fallbackHigh, source.low, source.fallbackLow);
+    } else {
+      urls.push(source.low, source.fallbackLow);
+    }
+  }
+
+  return Array.from(new Set(urls.filter(Boolean)));
+}
+
+function getLocalImageSources(card) {
+  const localSources = (card.imageSources || []).filter((source) => {
+    const urls = [source.low, source.fallbackLow, source.high, source.fallbackHigh].filter(Boolean);
+    return urls.some((url) => String(url).startsWith("./assets/cards/"));
+  });
+
+  if (localSources.length) return localSources;
+
+  const localUrls = [card.image, card.fallbackImage, card.highImage, card.highFallbackImage].filter((url) =>
+    String(url || "").startsWith("./assets/cards/")
+  );
+
+  if (!localUrls.length) return null;
+
+  const localUrl = localUrls[0];
+  return [
+    {
+      low: localUrl,
+      fallbackLow: localUrl,
+      high: localUrl,
+      fallbackHigh: localUrl,
+    },
+  ];
+}
+
+function applyImageUrls(image, urls, onExhausted) {
+  let index = 0;
+  image.onerror = () => {
+    index += 1;
+    if (urls[index]) {
+      image.src = urls[index];
+      return;
+    }
+    if (onExhausted) onExhausted();
+  };
+  image.src = urls[0] || "";
 }
 
 function setCardTitle(node, englishName, zhName) {
@@ -603,7 +534,7 @@ function getCandidateForms(cards, mon) {
   const indexedNames = window.POKEMON_FORM_NAMES?.[String(mon.id)] || [mon.name];
 
   for (const name of indexedNames) {
-    const form = getIndexedForm(name, mon.name);
+    const form = getIndexedForm(name, mon.name, mon.id);
     if (form.key === "base") continue;
     formsByKey.set(form.key, form);
   }
@@ -613,22 +544,13 @@ function getCandidateForms(cards, mon) {
     formsByKey.set(card.form.key, card.form);
   }
 
-  if (cards.some((card) => card.isShiny)) {
-    formsByKey.set("shiny", {
-      key: "shiny",
-      label: "Shiny",
-      shortLabel: "Shiny",
-      rank: 999,
-    });
-  }
-
   const forms = Array.from(formsByKey.values());
   forms.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
   return forms;
 }
 
-function getIndexedForm(name, baseName) {
-  const form = getCardForm(name);
+function getIndexedForm(name, baseName, dexId) {
+  const form = getCardForm(name, [dexId]);
   if (form.key !== "base" || normalizeCardName(name) === normalizeCardName(baseName)) {
     return form;
   }
@@ -641,8 +563,13 @@ function getIndexedForm(name, baseName) {
   };
 }
 
-function getCardForm(name) {
+function getCardForm(name, dexIds = []) {
   const normalized = String(name || "").toLowerCase();
+  const dexIdSet = new Set((dexIds || []).map(Number));
+  if (dexIdSet.has(6) && /\bm\s+charizard\b/.test(normalized) && !/\bx\b/.test(normalized)) {
+    return { key: "mega-y", label: "Mega Y", shortLabel: "Mega Y", rank: 21 };
+  }
+
   const formMatchers = [
     { key: "alolan", label: "Alolan", shortLabel: "Alolan", rank: 10, pattern: /\balolan\b/ },
     { key: "galarian", label: "Galarian", shortLabel: "Galarian", rank: 11, pattern: /\bgalarian\b/ },
@@ -673,97 +600,6 @@ function getCardForm(name) {
   );
 }
 
-function isShinyCard(card) {
-  const rarity = String(card.rarity || "").toLowerCase();
-  const setId = card.set?.id || "";
-  const cardNumber = getCardNumber(card.localId);
-  const officialCount = card.set?.cardCount?.official || 0;
-
-  return (
-    rarity.includes("shiny") ||
-    rarity.includes("radiant") ||
-    (setId === "sv04.5" && officialCount > 0 && cardNumber > officialCount)
-  );
-}
-
-async function mapLimit(items, limit, worker) {
-  const queue = [...items];
-  const runners = Array.from({ length: Math.min(limit, queue.length) }, async () => {
-    while (queue.length) {
-      const item = queue.shift();
-      await worker(item);
-    }
-  });
-  await Promise.all(runners);
-}
-
-function getPtcgoCode(set) {
-  if (!set) return "";
-  return (
-    SET_CODE_OVERRIDES.get(set.id) ||
-    SET_CODE_OVERRIDES.get(set.name) ||
-    state.ptcgoCodesBySetName.get(normalizeSetName(set.name || "")) ||
-    ""
-  );
-}
-
-function getSetDisplayCode(set) {
-  const id = String(set?.id || "");
-  const svMatch = id.match(/^sv(\d+)(?:pt(\d+))?/i);
-  if (svMatch) {
-    const main = Number(svMatch[1]);
-    return `SV${String(main).padStart(2, "0")}`;
-  }
-
-  const swshMatch = id.match(/^swsh(\d+)(?:\.(\d+))?/i);
-  if (swshMatch) {
-    return `SWSH${String(Number(swshMatch[1])).padStart(2, "0")}`;
-  }
-
-  const smMatch = id.match(/^sm(\d+)/i);
-  if (smMatch) return `SM${String(Number(smMatch[1])).padStart(2, "0")}`;
-
-  const xyMatch = id.match(/^xy(\d+)/i);
-  if (xyMatch) return `XY${String(Number(xyMatch[1])).padStart(2, "0")}`;
-
-  return getEraCode(set);
-}
-
-function getPrintedNumber(card) {
-  const number = card.localId || card.number || "";
-  const officialCount = card.set?.cardCount?.official || "";
-  return officialCount ? `${number}/${officialCount}` : number;
-}
-
-function getEraCode(set) {
-  const id = set?.id || "";
-  const name = set?.name || "";
-  const normalized = normalizeSetName(name);
-
-  if (id.startsWith("sv") || normalized.includes("scarletviolet")) return "SV";
-  if (id.startsWith("swsh") || normalized.includes("swordshield")) return "SWSH";
-  if (id.startsWith("sm") || normalized.includes("sunmoon")) return "SM";
-  if (id.startsWith("xy")) return "XY";
-  if (id.startsWith("bw") || normalized.includes("blackwhite")) return "BW";
-  if (id.startsWith("dp") || normalized.includes("diamondpearl")) return "DP";
-  if (id.startsWith("pl") || normalized.includes("platinum")) return "PL";
-  if (id.startsWith("hgss") || normalized.includes("heartgoldsoulsilver")) return "HGSS";
-  if (id.startsWith("ex")) return "EX";
-  if (id.startsWith("base")) return "BASE";
-  return "";
-}
-
-function titleCase(value) {
-  return value
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function normalizeSetName(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
 function normalizeCardName(value) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -787,11 +623,9 @@ function makeFormShortLabel(name, baseName) {
     .toUpperCase();
 }
 
-function getCardNumber(value) {
-  const numeric = String(value || "").match(/\d+/)?.[0];
-  return numeric ? Number(numeric) : 0;
-}
-
-function setStatus(message) {
-  els.status.textContent = message;
+function setStatus() {
+  if (!state.species.length) {
+    els.withImagesCount.textContent = "0";
+    els.totalSummaryCount.textContent = "0";
+  }
 }
