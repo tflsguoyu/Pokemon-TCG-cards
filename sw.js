@@ -1,8 +1,8 @@
-const CACHE_NAME = "ptcg-national-dex-v45";
+const CACHE_NAME = "ptcg-national-dex-v46";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=23",
+  "./styles.css?v=24",
   "./form-index.js?v=13",
   "./local-data.js?v=49",
   "./app.js?v=52",

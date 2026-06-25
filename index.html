@@ -11,7 +11,7 @@
     <title>PTCG 全国图鉴 / National Dex</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css?v=23" />
+    <link rel="stylesheet" href="./styles.css?v=24" />
   </head>
   <body>
     <header class="topbar">
@@ -47,6 +47,13 @@
             <option value="9">Gen 9</option>
           </select>
         </label>
+        <label class="status-shiny">
+          <input id="shinyOnlyInput" type="checkbox" />
+          <span class="tool-label">
+            <span>闪光</span>
+            <span>Shiny</span>
+          </span>
+        </label>
       </section>
       <div class="view-tools">
         <div class="background-filters" aria-label="背景筛选 / Background filters">
@@ -65,13 +72,6 @@
             </span>
           </label>
         </div>
-        <label class="status-shiny">
-          <input id="shinyOnlyInput" type="checkbox" />
-          <span class="tool-label">
-            <span>闪光</span>
-            <span>Shiny</span>
-          </span>
-        </label>
         <div class="status" id="status" aria-label="显示范围 / View mode">
           <button id="withImagesViewBtn" class="status-filter" type="button" aria-pressed="false">
             <span class="tool-label">

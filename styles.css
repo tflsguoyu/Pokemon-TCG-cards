@@ -33,7 +33,7 @@ body {
   top: 0;
   z-index: 5;
   display: grid;
-  grid-template-columns: auto 460px auto;
+  grid-template-columns: auto 390px auto;
   align-items: end;
   gap: 14px;
   padding: 10px clamp(16px, 4vw, 48px);
@@ -173,7 +173,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 44px;
+  min-height: 34px;
   padding: 5px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -200,7 +200,7 @@ main {
 
 .controls {
   display: grid;
-  grid-template-columns: 210px 118px 112px;
+  grid-template-columns: 136px 118px 112px;
   gap: 8px;
   align-items: end;
 }
@@ -603,7 +603,7 @@ h2 {
 
   .view-tools {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) 86px minmax(158px, 1fr);
+    grid-template-columns: minmax(0, 1.15fr) minmax(158px, 1fr);
     align-items: stretch;
   }
 
@@ -616,13 +616,8 @@ h2 {
     justify-content: center;
   }
 
-  .status-shiny {
-    justify-content: center;
-    padding-inline: 8px;
-  }
-
   .controls {
-    grid-template-columns: minmax(0, 1fr) 132px;
+    grid-template-columns: minmax(0, 1fr) 108px 78px;
   }
 
   .dex-grid {
