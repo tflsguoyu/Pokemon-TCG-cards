@@ -51,6 +51,7 @@ const els = {
 };
 
 init();
+registerServiceWorker();
 
 async function init() {
   wireControls();
@@ -628,4 +629,13 @@ function setStatus() {
     els.withImagesCount.textContent = "0";
     els.totalSummaryCount.textContent = "0";
   }
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  if (location.protocol === "file:") return;
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
 }
