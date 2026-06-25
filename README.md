@@ -15,9 +15,10 @@ review.js                  审核页逻辑
 review.css                 审核页样式
 local-data.js              当前卡库数据
 form-index.js              宝可梦地区形态、Mega 等形态索引
-assets/cards/              本地卡图，统一 600 x 825 WebP
+assets/cards/              本地卡图，统一高度 825px 的 WebP
 scripts/apply-review-results.mjs    应用审核页保存的结果
 scripts/find-card.mjs               本地查卡工具
+scripts/refresh-card-images.mjs     按图片规则全量重抓并转成本地 WebP
 ```
 
 ## 数据规则
@@ -48,8 +49,20 @@ backgroundType: "content" | "simple" | "other"
 当前卡图都应是：
 
 ```text
-600 x 825 WebP
+height = 825px
+width = 按原图比例自动缩放
+format = WebP
+alpha = 保留透明通道
 ```
+
+补图和转图规则：
+
+1. 先试 TCGdex 图片，优先使用带 alpha 且存在透明像素的版本。
+2. TCGdex 没有透明图时，再试 Scrydex 图片，同样优先使用带 alpha 且存在透明像素的版本。
+3. 两边都拿不到透明图时，可以使用不透明图；不透明图也优先用 TCGdex 来源，TCGdex 没有可用图时再用 Scrydex 或其他来源。
+4. 不管来源原图尺寸是多少，保存到本地时只固定高度为 `825px`，宽度按比例自动变化，不强行拉伸或裁切到固定宽度。
+5. Scrydex 缺图时可能返回 Pokemon 卡背占位图，不能当作有效卡图保存。
+6. 每张卡必须在后台数据里记录图片来源，写入 `imageSource` 字段。
 
 ## local-data.js 存什么
 
@@ -85,6 +98,10 @@ backgroundType: "content" | "simple" | "other"
   rarity: "Illustration rare",
   label: "IR",
   releaseDate: "2023-09-22",
+  imageSource: {
+    provider: "TCGdex",
+    url: "https://assets.tcgdex.net/en/sv/sv03.5/166/high.webp"
+  },
   rank: 1
 }
 ```
@@ -97,11 +114,10 @@ backgroundType: "content" | "simple" | "other"
 - `highImage`
 - `highFallbackImage`
 - `imageSources`
-- `source`
 - `updated`
 - `form.pattern`
 
-原因是页面现在只读本地 `600 x 825 WebP`，不再需要同时保存在线图、低清图、高清图和 fallback 图。需要显示的出处文字会从 `setName`、`printedNumber`、`rarity` 自动拼出来。
+原因是页面现在只读本地 WebP，不再需要同时保存在线图、低清图、高清图和 fallback 图。图片来源统一记录在 `imageSource`；需要显示的卡牌出处文字会从 `setName`、`printedNumber`、`rarity` 自动拼出来。
 
 ## 本地运行
 
@@ -156,7 +172,7 @@ node scripts/find-card.mjs "MEW 166"
 [语言] 大时代-PTCGO代码-系列内编号
 ```
 
-如果本地没有，再按下面顺序查公开来源。先拿卡信息，再拿图片；图片最终都要保存成本地 `600 x 825 WebP`。
+如果本地没有，再按下面顺序查公开来源。先拿卡信息，再拿图片；图片最终都要保存成本地 WebP，高度统一为 `825px`，宽度按比例自动变化，并保留 alpha。
 
 1. TCGdex，优先拿卡信息和图片  
    API: `https://api.tcgdex.net/v2/en/cards/{cardId}`  
@@ -166,7 +182,11 @@ node scripts/find-card.mjs "MEW 166"
    低清图：`https://images.pokemontcg.io/{setId}/{number}.png`  
    高清图：`https://images.pokemontcg.io/{setId}/{number}_hires.png`
 
-3. 其他公开网页，前两个来源都拿不到时人工核对  
+3. Scrydex，前两个 API 没有收录新卡或缺图时查 expansion 页面  
+   Expansion index: `https://scrydex.com/pokemon/expansions/`  
+   例子：`https://scrydex.com/pokemon/expansions/mega-evolution-black-star-promos/mep`
+
+4. 其他公开网页，前面来源都拿不到时人工核对  
    只用来确认卡面和下载可用图片。不要把外链写进页面，必须保存到 `assets/cards/` 后再写入 `local-data.js`。
 
 注意：不要收录 Pokemon TCG Pocket。`A1/A2...`、`B1/B1a/B2...` 这类 Pocket 系列不属于实体卡。
@@ -231,7 +251,7 @@ TCGdex 如果有 `image` 字段，优先用它：
 {image}/low.webp
 ```
 
-优先下载 `high.webp`。如果只有 `low.webp` 能打开，也可以先用低清图，但最终仍要转成 `600 x 825 WebP` 存本地。
+优先下载 `high.webp`。如果只有 `low.webp` 能打开，也可以先用低清图，但最终仍要转成高度 `825px`、宽度自适应的 WebP 存本地。
 
 ### 4. TCGdex 没图时查 Pokemon TCG API
 
@@ -278,22 +298,31 @@ assets/cards/{cardId}.webp
 尺寸统一：
 
 ```text
-600 x 825 WebP
+height = 825px
+width = 按比例自动变化
+format = WebP
+alpha = 尽量保留；来源都没有透明图时允许不透明
 ```
 
 如果手动处理图片，可以用 ImageMagick：
 
 ```sh
-magick input.png -resize 600x825! -strip -quality 82 assets/cards/{cardId}.webp
+magick input.png -resize x825 -background none -define webp:lossless=true assets/cards/{cardId}.webp
+```
+
+如果要按当前规则全量重新抓取并更新 `imageSource`：
+
+```sh
+node scripts/refresh-card-images.mjs
 ```
 
 ### 7. 加入或更新数据
 
 这个项目以当前的 `local-data.js` 和 `assets/cards/` 为准，不会自动改已经存好的数据。
 
-如果只是卡有了、图缺了，直接把图片保存到 `assets/cards/{cardId}.webp`，然后把这张卡的 `image` 字段改成 `./assets/cards/{cardId}.webp`。
+如果只是卡有了、图缺了，直接把图片保存到 `assets/cards/{cardId}.webp`，然后把这张卡的 `image` 字段改成 `./assets/cards/{cardId}.webp`，并补 `imageSource`。
 
-如果本地完全没有这张卡，按上面的来源顺序查到卡信息和图片，再手动把这张卡加入 `local-data.js`，并把图片保存到 `assets/cards/{cardId}.webp`。
+如果本地完全没有这张卡，按上面的来源顺序查到卡信息和图片，再手动把这张卡加入 `local-data.js`，把图片保存到 `assets/cards/{cardId}.webp`，并记录 `imageSource`。
 
 候选卡下拉菜单按发行时间排序：日期新的排前面；同一天通常是同一个系列，系列内编号大的排前面。Promo 卡优先看单卡 `releaseDate`，这个日期取价格记录里最早出现的时间；没有时才用对应 promo 系列的日期。
 
