@@ -1,5 +1,6 @@
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
+import { writeLocalData } from "./version-utils.mjs";
 
 const reviewPath = process.argv[2];
 
@@ -76,7 +77,9 @@ function applyToLocalData(decisions) {
     })
     .filter(([, cards]) => cards.length > 0);
 
-  writeFileSync(path, `${prefix}${JSON.stringify(data)};\n`);
+  const changed =
+    stats.changedContent + stats.changedSimple + stats.changedOther + stats.removedCards > 0;
+  if (changed) writeLocalData(data);
 
   for (const imagePath of removedImages) {
     try {

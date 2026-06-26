@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
+import { writeLocalData } from "./version-utils.mjs";
 
 const DATA_PATH = "local-data.js";
 const DATA_PREFIX = "window.PTCG_LOCAL_DATA = ";
@@ -74,7 +75,6 @@ await Promise.all(
 summary.finishedAt = new Date().toISOString();
 writeSummary();
 
-data.version = Number(data.version || 0) + 1;
 for (const [, list] of data.cardsByDex || []) {
   for (const card of list) {
     const result = summary.results.find((item) => item.id === card.id);
@@ -85,7 +85,7 @@ for (const [, list] of data.cardsByDex || []) {
     };
   }
 }
-writeFileSync(DATA_PATH, `${DATA_PREFIX}${JSON.stringify(data)};\n`);
+writeLocalData(data);
 
 console.log(JSON.stringify(summary, null, 2));
 

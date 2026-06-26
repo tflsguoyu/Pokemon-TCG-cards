@@ -185,9 +185,9 @@ function renderSeriesPanel(group, options = {}) {
   panel.id = getSeriesPanelId(options.seriesIndex);
   panel.dataset.seriesTone = String((options.seriesIndex || 0) % 6);
   panel.classList.toggle("era-start", Boolean(options.isEraStart));
-  panel.setAttribute("aria-label", getSeriesLabel(group[0]));
+  panel.setAttribute("aria-label", getSeriesCountLabel(group));
 
-  const label = renderSeriesLabel(group[0]);
+  const label = renderSeriesLabel(group);
   const cards = document.createElement("div");
   cards.className = "series-cards";
 
@@ -308,11 +308,11 @@ function groupCardsBySeries(cards) {
   return groups;
 }
 
-function renderSeriesLabel(card) {
+function renderSeriesLabel(group) {
   const label = document.createElement("div");
   label.className = "series-label";
-  label.textContent = getSeriesLabel(card);
-  label.title = getSeriesLabel(card);
+  label.textContent = getSeriesCountLabel(group);
+  label.title = getSeriesCountLabel(group);
   return label;
 }
 
@@ -332,6 +332,11 @@ function getSeriesLabel(card) {
   const code = getMenuSetCode(card);
   const setName = card.setName || card.setId || "";
   return [era, code, setName].filter(Boolean).join(" · ");
+}
+
+function getSeriesCountLabel(group) {
+  const firstCard = group[0];
+  return `${getSeriesLabel(firstCard)} (${group.length})`;
 }
 
 function getSeriesNavLabel(card) {

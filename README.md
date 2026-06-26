@@ -311,12 +311,24 @@ magick input.png -resize x825 -background none -define webp:lossless=true assets
 - `setReleaseDates` 补系列发行日
 - `ptcgoCodesBySetName` 补系列名到 PTCGO code 的映射
 
-更新数据后同步版本：
+更新数据时脚本会自动同步版本：
 
 - `local-data.js` 顶层 `version`
 - `app.js` 的 `CACHE_VERSION`
-- `index.html` 里的 `local-data.js?v=...` 和 `app.js?v=...`
-- `review.html` 里的 `local-data.js?v=...`
+- `sw.js` 的 service worker cache name 和 app shell query
+- `index.html` / `review.html` 里的资源 query
+
+如果只需要手动对齐现有版本，可以运行：
+
+```bash
+node scripts/sync-version.mjs
+```
+
+如果需要主动升一个版本并同步所有引用，可以运行：
+
+```bash
+node scripts/sync-version.mjs --bump
+```
 
 ## 审核分类
 

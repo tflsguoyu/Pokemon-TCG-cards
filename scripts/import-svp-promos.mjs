@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
+import { writeLocalData } from "./version-utils.mjs";
 
 const DATA_PATH = "local-data.js";
 const DATA_PREFIX = "window.PTCG_LOCAL_DATA = ";
@@ -126,10 +127,7 @@ for (const number of numbers) {
 }
 
 if (summary.added > 0) {
-  data.version = Number(data.version || 0) + 1;
-  data.generatedAt = new Date().toISOString();
-  data.cardsByDex.sort((a, b) => Number(a[0]) - Number(b[0]));
-  writeFileSync(DATA_PATH, `${DATA_PREFIX}${JSON.stringify(data)};\n`);
+  writeLocalData(data);
 }
 
 writeFileSync(`${TMP_DIR}/summary.json`, JSON.stringify(summary, null, 2));
