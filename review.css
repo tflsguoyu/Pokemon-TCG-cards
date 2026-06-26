@@ -191,6 +191,13 @@ button {
   border-color: var(--blue);
 }
 
+.series-nav-button.active {
+  border-color: color-mix(in srgb, var(--nav-line, var(--blue)) 72%, #172026);
+  background: color-mix(in srgb, var(--nav-bg, var(--panel)) 48%, #172026);
+  color: white;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
 .series-nav-button[data-series-tone="0"] {
   --nav-line: rgba(36, 107, 159, 0.5);
   --nav-bg: rgba(36, 107, 159, 0.1);

@@ -7,6 +7,8 @@ const state = {
   query: "",
   type: "all",
   view: "all",
+  activeSeriesIndex: -1,
+  seriesNavRaf: 0,
 };
 
 const els = {
@@ -56,6 +58,8 @@ function wireControls() {
   els.imageDialog.addEventListener("click", (event) => {
     if (event.target === els.imageDialog) els.imageDialog.close();
   });
+
+  document.querySelector("main").addEventListener("scroll", scheduleSeriesNavHighlight, { passive: true });
 }
 
 function loadCards() {
@@ -176,6 +180,7 @@ function render() {
   els.grid.replaceChildren(fragment);
   renderEraNav(groups);
   renderSeriesNav(groups);
+  updateActiveSeriesFromScroll({ scrollNav: false });
   updateSummary(cards.length);
 }
 
@@ -217,7 +222,10 @@ function renderSeriesNav(groups) {
     button.textContent = getSeriesNavLabel(firstCard);
     button.title = label;
     button.setAttribute("aria-label", label);
-    button.addEventListener("click", () => scrollToSeries(index));
+    button.addEventListener("click", () => {
+      setActiveSeriesIndex(index);
+      scrollToSeries(index);
+    });
     fragment.appendChild(button);
   });
 
@@ -270,10 +278,16 @@ function scrollToEra(firstSeriesIndex) {
 function scrollSeriesNavButtonIntoView(index, behavior = "smooth") {
   const button = els.seriesNav.querySelector(`[data-series-index="${index}"]`);
   if (!button) return;
-  els.seriesNav.scrollTo({
-    left: Math.max(0, button.offsetLeft - 8),
-    behavior,
-  });
+  const navLeft = els.seriesNav.scrollLeft;
+  const navRight = navLeft + els.seriesNav.clientWidth;
+  const buttonLeft = button.offsetLeft;
+  const buttonRight = buttonLeft + button.offsetWidth;
+
+  if (buttonLeft < navLeft + 8) {
+    els.seriesNav.scrollTo({ left: Math.max(0, buttonLeft - 8), behavior });
+  } else if (buttonRight > navRight - 8) {
+    els.seriesNav.scrollTo({ left: Math.max(0, buttonRight - els.seriesNav.clientWidth + 8), behavior });
+  }
 }
 
 function scrollToSeries(index, behavior = "smooth") {
@@ -284,6 +298,60 @@ function scrollToSeries(index, behavior = "smooth") {
   const panelLeft = panel.offsetLeft;
   const targetLeft = Math.max(0, panelLeft - 16);
   main.scrollTo({ left: targetLeft, behavior });
+}
+
+function scheduleSeriesNavHighlight() {
+  if (state.seriesNavRaf) return;
+  state.seriesNavRaf = requestAnimationFrame(() => {
+    state.seriesNavRaf = 0;
+    updateActiveSeriesFromScroll();
+  });
+}
+
+function updateActiveSeriesFromScroll(options = {}) {
+  const main = document.querySelector("main");
+  const panels = Array.from(els.grid.querySelectorAll(".series-panel"));
+  if (!main || panels.length === 0) {
+    setActiveSeriesIndex(-1, options);
+    return;
+  }
+
+  const marker = main.scrollLeft + Math.min(120, main.clientWidth * 0.25);
+  let activeIndex = 0;
+  let closestDistance = Infinity;
+
+  panels.forEach((panel, index) => {
+    const left = panel.offsetLeft;
+    const right = left + panel.offsetWidth;
+    const containsMarker = marker >= left && marker < right;
+    const distance = containsMarker ? 0 : Math.min(Math.abs(marker - left), Math.abs(marker - right));
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      activeIndex = index;
+    }
+  });
+
+  setActiveSeriesIndex(activeIndex, options);
+}
+
+function setActiveSeriesIndex(index, options = {}) {
+  if (state.activeSeriesIndex === index && index !== -1) return;
+  state.activeSeriesIndex = index;
+
+  for (const button of els.seriesNav.querySelectorAll(".series-nav-button")) {
+    const isActive = Number(button.dataset.seriesIndex) === index;
+    button.classList.toggle("active", isActive);
+    if (isActive) {
+      button.setAttribute("aria-current", "true");
+    } else {
+      button.removeAttribute("aria-current");
+    }
+  }
+
+  if (index !== -1 && options.scrollNav !== false) {
+    scrollSeriesNavButtonIntoView(index, "auto");
+  }
 }
 
 function getSeriesPanelId(index) {
