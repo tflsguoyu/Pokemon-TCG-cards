@@ -29,6 +29,8 @@ const summary = {
   updatedUnique: 0,
   fallbackUnique: 0,
   failedUnique: 0,
+  setDatesUpdated: 0,
+  setDatesFailed: [],
   fallback: [],
   failed: [],
 };
@@ -57,6 +59,7 @@ for (const { dexId, card } of cardRefs) {
   refreshLocalCard(card, remote, dexId);
 }
 
+await refreshSetReleaseDates();
 const version = writeLocalData(data);
 summary.version = version;
 summary.finishedAt = new Date().toISOString();
@@ -73,6 +76,40 @@ async function getTcgdexCard(id) {
   } catch {
     return null;
   }
+}
+
+async function getTcgdexSet(setId) {
+  try {
+    const response = await fetch(`https://api.tcgdex.net/v2/en/sets/${encodeURIComponent(setId)}`);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function refreshSetReleaseDates() {
+  const dates = new Map(data.setReleaseDates || []);
+  const setIds = new Set();
+  for (const [, cards] of data.cardsByDex || []) {
+    for (const card of cards) {
+      if (card.setId) setIds.add(card.setId);
+    }
+  }
+
+  for (const setId of Array.from(setIds).sort()) {
+    const set = await getTcgdexSet(setId);
+    if (!set?.releaseDate) {
+      summary.setDatesFailed.push({ setId });
+      continue;
+    }
+    if (dates.get(setId) !== set.releaseDate) {
+      dates.set(setId, set.releaseDate);
+      summary.setDatesUpdated += 1;
+    }
+  }
+
+  data.setReleaseDates = Array.from(dates.entries()).sort(([a], [b]) => String(a).localeCompare(String(b)));
 }
 
 function refreshLocalCard(card, remote, currentDexId) {
@@ -206,6 +243,7 @@ function getLabelAndRank(source, existing) {
 }
 
 function getEraCode(setId) {
+  if (["dc1", "g1"].includes(String(setId))) return "XY";
   if (String(setId).startsWith("me")) return "ME";
   if (String(setId).startsWith("swsh")) return "SWSH";
   if (String(setId).startsWith("sv")) return "SV";

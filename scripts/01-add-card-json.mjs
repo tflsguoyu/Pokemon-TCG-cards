@@ -72,6 +72,13 @@ function getTcgdexCard(id) {
   return JSON.parse(output);
 }
 
+function getTcgdexSet(setId) {
+  const output = execFileSync("curl", ["-fsSL", `https://api.tcgdex.net/v2/en/sets/${encodeURIComponent(setId)}`], {
+    encoding: "utf8",
+  });
+  return JSON.parse(output);
+}
+
 function buildLocalCard(card, data) {
   const number = String(card.localId || "");
   const officialCount = card.set?.cardCount?.official || 0;
@@ -137,10 +144,12 @@ function addCard(data, dexId, card) {
 }
 
 function addSetReleaseDate(data, set) {
-  if (!set?.id || !set?.releaseDate) return;
+  if (!set?.id) return;
+  const releaseDate = set.releaseDate || getTcgdexSet(set.id).releaseDate;
+  if (!releaseDate) return;
   const dates = new Map(data.setReleaseDates || []);
-  if (dates.has(set.id)) return;
-  dates.set(set.id, set.releaseDate);
+  if (dates.get(set.id) === releaseDate) return;
+  dates.set(set.id, releaseDate);
   data.setReleaseDates = Array.from(dates.entries()).sort(([a], [b]) => String(a).localeCompare(String(b)));
 }
 
@@ -210,6 +219,7 @@ function getLabelAndRank(card) {
 }
 
 function getEraCode(setId) {
+  if (["dc1", "g1"].includes(String(setId))) return "XY";
   if (String(setId).startsWith("swsh")) return "SWSH";
   if (String(setId).startsWith("sv")) return "SV";
   if (String(setId).startsWith("sm")) return "SM";

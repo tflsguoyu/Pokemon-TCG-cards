@@ -209,7 +209,7 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 }
 ```
 
-`releaseDate` 是可选字段。普通大系列默认用 `setReleaseDates` 里的系列发行日，不需要每张卡都写。Promo 卡优先用价格记录里最早出现的日期作为单卡 `releaseDate`；查不到价格历史时，再用 promo 系列发行日兜底。
+`releaseDate` 是可选字段，只在有精确到日的单卡发行日时才写。默认排序使用 `setReleaseDates` 里的系列发行日；不要写 `YYYY-MM-01` 这类月度占位日期。
 
 旧字段不要再写：
 
