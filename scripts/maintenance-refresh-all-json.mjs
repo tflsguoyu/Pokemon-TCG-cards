@@ -172,14 +172,15 @@ function normalizeScrydexNumber(value) {
 function classifyForm(name) {
   const normalized = String(name || "").toLowerCase();
   const forms = [
-    { key: "alolan", label: "Alolan", shortLabel: "Alo", rank: 10, pattern: /\balolan\b/ },
-    { key: "galarian", label: "Galarian", shortLabel: "Gal", rank: 12, pattern: /\bgalarian\b/ },
-    { key: "hisuian", label: "Hisuian", shortLabel: "His", rank: 14, pattern: /\bhisuian\b/ },
-    { key: "origin", label: "Origin", shortLabel: "Origin", rank: 30, pattern: /\borigin\b/ },
-    { key: "single-strike", label: "Single Strike", shortLabel: "Single", rank: 40, pattern: /\bsingle strike\b/ },
-    { key: "rapid-strike", label: "Rapid Strike", shortLabel: "Rapid", rank: 41, pattern: /\brapid strike\b/ },
+    { key: "alolan", label: "Alolan", rank: 10, pattern: /\balolan\b/ },
+    { key: "galarian", label: "Galarian", rank: 12, pattern: /\bgalarian\b/ },
+    { key: "hisuian", label: "Hisuian", rank: 14, pattern: /\bhisuian\b/ },
+    { key: "paldean", label: "Paldean", rank: 16, pattern: /\bpaldean\b/ },
+    { key: "origin", label: "Origin", rank: 30, pattern: /\borigin\b/ },
+    { key: "single-strike", label: "Single Strike", rank: 40, pattern: /\bsingle strike\b/ },
+    { key: "rapid-strike", label: "Rapid Strike", rank: 41, pattern: /\brapid strike\b/ },
   ];
-  return forms.find((form) => form.pattern.test(normalized)) || { key: "base", label: "Base", shortLabel: "Std", rank: 0 };
+  return forms.find((form) => form.pattern.test(normalized)) || { key: "base", label: "Base", rank: 0 };
 }
 
 function getLabelAndRank(source, existing) {

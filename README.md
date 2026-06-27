@@ -188,7 +188,7 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
   pokemonName: "Flareon",
   cardName: "Flareon",
   image: "./assets/cards/swsh9-TG01.webp",
-  form: { key: "base", label: "Base", shortLabel: "Std", rank: 0 },
+  form: { key: "base", label: "Base", rank: 0 },
   isShiny: false,
   backgroundType: "content",
   eraCode: "",

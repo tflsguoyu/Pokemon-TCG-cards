@@ -1,4 +1,4 @@
-const CACHE_VERSION = 105;
+const CACHE_VERSION = 109;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -11,6 +11,8 @@ const NATIONAL_DEX_RANGES = {
   8: [810, 905],
   9: [906, 1025],
 };
+
+const REGIONAL_FORM_KEYS = new Set(["alolan", "galarian", "hisuian", "paldean"]);
 
 const state = {
   species: [],
@@ -238,7 +240,7 @@ function renderDexCard(mon) {
       const button = document.createElement("button");
       button.className = "form-button";
       button.type = "button";
-      button.textContent = form.shortLabel;
+      button.textContent = form.label;
       button.title = form.label;
       button.dataset.formKey = form.key;
       button.setAttribute("aria-pressed", String(form.key === activeFormKey));
@@ -291,7 +293,7 @@ function renderDexCard(mon) {
     }
 
     if (activeFormKey === "base") {
-      return sortCardsForMenu(cards.filter((card) => card.form.key === "base" && isCardVisibleByBackground(card)));
+      return sortCardsForMenu(cards.filter((card) => !isRegionalForm(card.form) && isCardVisibleByBackground(card)));
     }
 
     if (activeFormKey === "shiny") {
@@ -534,18 +536,22 @@ function getCandidateForms(cards, mon) {
 
   for (const name of indexedNames) {
     const form = getIndexedForm(name, mon.name, mon.id);
-    if (form.key === "base") continue;
+    if (!isRegionalForm(form)) continue;
     formsByKey.set(form.key, form);
   }
 
   for (const card of cards) {
-    if (card.form.key === "base") continue;
+    if (!isRegionalForm(card.form)) continue;
     formsByKey.set(card.form.key, card.form);
   }
 
   const forms = Array.from(formsByKey.values());
   forms.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
   return forms;
+}
+
+function isRegionalForm(form) {
+  return REGIONAL_FORM_KEYS.has(form?.key);
 }
 
 function getIndexedForm(name, baseName, dexId) {
@@ -557,7 +563,6 @@ function getIndexedForm(name, baseName, dexId) {
   return {
     key: `form-${slugify(name)}`,
     label: name,
-    shortLabel: makeFormShortLabel(name, baseName),
     rank: 40,
   };
 }
@@ -566,34 +571,33 @@ function getCardForm(name, dexIds = []) {
   const normalized = String(name || "").toLowerCase();
   const dexIdSet = new Set((dexIds || []).map(Number));
   if (dexIdSet.has(6) && /\bm\s+charizard\b/.test(normalized) && !/\bx\b/.test(normalized)) {
-    return { key: "mega-y", label: "Mega Y", shortLabel: "Mega Y", rank: 21 };
+    return { key: "mega-y", label: "Mega Y", rank: 21 };
   }
 
   const formMatchers = [
-    { key: "alolan", label: "Alolan", shortLabel: "Alolan", rank: 10, pattern: /\balolan\b/ },
-    { key: "galarian", label: "Galarian", shortLabel: "Galarian", rank: 11, pattern: /\bgalarian\b/ },
-    { key: "hisuian", label: "Hisuian", shortLabel: "Hisuian", rank: 12, pattern: /\bhisuian\b/ },
-    { key: "paldean", label: "Paldean", shortLabel: "Paldean", rank: 13, pattern: /\bpaldean\b/ },
-    { key: "mega-x", label: "Mega X", shortLabel: "Mega X", rank: 20, pattern: /\bmega\b.*\bx\b|\bm\s+[^,]+[- ]?ex\b.*\bx\b/ },
-    { key: "mega-y", label: "Mega Y", shortLabel: "Mega Y", rank: 21, pattern: /\bmega\b.*\by\b|\bm\s+[^,]+[- ]?ex\b.*\by\b/ },
-    { key: "mega", label: "Mega", shortLabel: "Mega", rank: 22, pattern: /\bmega\b|\bm\s+[a-z]/ },
-    { key: "primal", label: "Primal", shortLabel: "Primal", rank: 23, pattern: /\bprimal\b/ },
-    { key: "origin", label: "Origin", shortLabel: "Origin", rank: 30, pattern: /\borigin\b/ },
-    { key: "therian", label: "Therian", shortLabel: "Therian", rank: 31, pattern: /\btherian\b/ },
-    { key: "sky", label: "Sky", shortLabel: "Sky", rank: 32, pattern: /\bsky forme\b/ },
-    { key: "crowned", label: "Crowned", shortLabel: "Crowned", rank: 33, pattern: /\bcrowned\b/ },
-    { key: "dusk-mane", label: "Dusk Mane", shortLabel: "DM", rank: 34, pattern: /\bdusk mane\b/ },
-    { key: "dawn-wings", label: "Dawn Wings", shortLabel: "DW", rank: 35, pattern: /\bdawn wings\b/ },
-    { key: "black", label: "Black", shortLabel: "Blk", rank: 36, pattern: /\bblack kyurem\b/ },
-    { key: "white", label: "White", shortLabel: "Wht", rank: 37, pattern: /\bwhite kyurem\b/ },
-    { key: "partner", label: "Partner", shortLabel: "Par", rank: 38, pattern: /\bpartner\b/ },
+    { key: "alolan", label: "Alolan", rank: 10, pattern: /\balolan\b/ },
+    { key: "galarian", label: "Galarian", rank: 11, pattern: /\bgalarian\b/ },
+    { key: "hisuian", label: "Hisuian", rank: 12, pattern: /\bhisuian\b/ },
+    { key: "paldean", label: "Paldean", rank: 13, pattern: /\bpaldean\b/ },
+    { key: "mega-x", label: "Mega X", rank: 20, pattern: /\bmega\b.*\bx\b|\bm\s+[^,]+[- ]?ex\b.*\bx\b/ },
+    { key: "mega-y", label: "Mega Y", rank: 21, pattern: /\bmega\b.*\by\b|\bm\s+[^,]+[- ]?ex\b.*\by\b/ },
+    { key: "mega", label: "Mega", rank: 22, pattern: /\bmega\b|\bm\s+[a-z]/ },
+    { key: "primal", label: "Primal", rank: 23, pattern: /\bprimal\b/ },
+    { key: "origin", label: "Origin", rank: 30, pattern: /\borigin\b/ },
+    { key: "therian", label: "Therian", rank: 31, pattern: /\btherian\b/ },
+    { key: "sky", label: "Sky", rank: 32, pattern: /\bsky forme\b/ },
+    { key: "crowned", label: "Crowned", rank: 33, pattern: /\bcrowned\b/ },
+    { key: "dusk-mane", label: "Dusk Mane", rank: 34, pattern: /\bdusk mane\b/ },
+    { key: "dawn-wings", label: "Dawn Wings", rank: 35, pattern: /\bdawn wings\b/ },
+    { key: "black", label: "Black", rank: 36, pattern: /\bblack kyurem\b/ },
+    { key: "white", label: "White", rank: 37, pattern: /\bwhite kyurem\b/ },
+    { key: "partner", label: "Partner", rank: 38, pattern: /\bpartner\b/ },
   ];
 
   return (
     formMatchers.find((form) => form.pattern.test(normalized)) || {
       key: "base",
       label: "Base",
-      shortLabel: "Std",
       rank: 0,
     }
   );
@@ -605,21 +609,6 @@ function normalizeCardName(value) {
 
 function slugify(value) {
   return normalizeCardName(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
-function makeFormShortLabel(name, baseName) {
-  const formPart = normalizeCardName(name)
-    .replace(normalizeCardName(baseName), "")
-    .replace(/\bforme?\b/g, "")
-    .trim();
-  const source = formPart || name;
-  return source
-    .split(/[^a-z0-9]+/i)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase();
 }
 
 function setStatus() {
