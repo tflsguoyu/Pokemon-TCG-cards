@@ -315,7 +315,7 @@ main {
 .review-card {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 5px;
   height: 100%;
   min-height: 0;
@@ -344,6 +344,12 @@ main {
 
 .review-card.marked-delete {
   border-color: rgba(216, 75, 61, 0.42);
+}
+
+.review-card.shiny-changed {
+  box-shadow:
+    inset 0 0 0 2px rgba(241, 200, 75, 0.28),
+    0 8px 18px rgba(25, 35, 42, 0.06);
 }
 
 .card-meta {
@@ -497,6 +503,33 @@ h2 {
   border-color: rgba(216, 75, 61, 0.42);
   background: var(--red);
   color: white;
+}
+
+.shiny-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.shiny-choice {
+  height: 28px;
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.shiny-choice.active {
+  border-color: rgba(198, 153, 28, 0.52);
+  background: var(--yellow);
+  color: #4b3600;
+}
+
+.shiny-no.active {
+  border-color: rgba(96, 112, 124, 0.32);
+  background: #e9eef1;
+  color: var(--ink);
 }
 
 .image-dialog {

@@ -1,3 +1,4 @@
 tmp/
 .DS_Store
 ptcg-*-review-*.json
+ptcg-review-*.json

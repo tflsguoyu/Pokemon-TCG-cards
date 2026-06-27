@@ -1,4 +1,4 @@
-const CACHE_VERSION = 62;
+const CACHE_VERSION = 105;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -181,9 +181,7 @@ function getScopedSpecies() {
     const hasCards = state.cardsByDex.has(mon.id);
     const zhName = state.zhNamesByDex.get(mon.id) || "";
     const inRange = mon.id >= start && mon.id <= end;
-    const queryText = `${mon.id} ${mon.name} ${zhName} ${(state.cardsByDex.get(mon.id) || [])
-      .map((card) => `${card.name} ${getCardSourceLabel(card)} ${card.setName} ${card.ptcgoCode} ${card.printedNumber}`)
-      .join(" ")}`.toLowerCase();
+    const queryText = `${String(mon.id).padStart(4, "0")} ${mon.name} ${zhName}`.toLowerCase();
     const matchesQuery = !state.query || queryText.includes(state.query);
     return inRange && matchesQuery;
   });

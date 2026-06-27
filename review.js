@@ -4,6 +4,7 @@ const BACKGROUND_TYPES = ["content", "simple", "other"];
 const state = {
   cards: [],
   decisions: new Map(),
+  shinyDecisions: new Map(),
   query: "",
   type: "all",
   view: "all",
@@ -31,7 +32,9 @@ init();
 
 function init() {
   state.cards = loadCards();
-  state.decisions = loadDecisions();
+  const saved = loadSavedReviewState();
+  state.decisions = saved.decisions;
+  state.shinyDecisions = saved.shinyDecisions;
   pruneStaleDecisions();
   wireControls();
   render();
@@ -74,6 +77,7 @@ function loadCards() {
         dexId: Number(dexId),
         zhName: zhNames.get(Number(dexId)) || "",
         originalBackgroundType: normalizeBackgroundType(card.backgroundType),
+        originalIsShiny: Boolean(card.isShiny),
         ...card,
       });
     }
@@ -133,12 +137,15 @@ function getCardNumberValue(card) {
   return match ? Number(match[0]) : 0;
 }
 
-function loadDecisions() {
+function loadSavedReviewState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return new Map(Object.entries(saved.decisions || {}));
+    return {
+      decisions: new Map(Object.entries(saved.decisions || {})),
+      shinyDecisions: new Map(Object.entries(saved.shinyDecisions || {}).map(([cardId, value]) => [cardId, Boolean(value)])),
+    };
   } catch {
-    return new Map();
+    return { decisions: new Map(), shinyDecisions: new Map() };
   }
 }
 
@@ -147,6 +154,10 @@ function pruneStaleDecisions() {
   for (const [cardId, decision] of state.decisions) {
     const card = cardById.get(cardId);
     if (!card || decision === card.originalBackgroundType) state.decisions.delete(cardId);
+  }
+  for (const [cardId, isShiny] of state.shinyDecisions) {
+    const card = cardById.get(cardId);
+    if (!card || isShiny === card.originalIsShiny) state.shinyDecisions.delete(cardId);
   }
   persistDecisions();
 }
@@ -157,6 +168,7 @@ function persistDecisions() {
     JSON.stringify({
       updatedAt: new Date().toISOString(),
       decisions: Object.fromEntries(state.decisions),
+      shinyDecisions: Object.fromEntries(state.shinyDecisions),
     })
   );
 }
@@ -416,8 +428,9 @@ function getSeriesNavLabel(card) {
 function getVisibleCards() {
   return state.cards.filter((card) => {
     const decision = getDecision(card);
+    const shinyChanged = hasShinyChange(card);
     if (state.type !== "all" && card.originalBackgroundType !== state.type) return false;
-    if (state.view === "changed" && decision === card.originalBackgroundType) return false;
+    if (state.view === "changed" && decision === card.originalBackgroundType && !shinyChanged) return false;
     if (state.view === "deleted" && decision !== "delete") return false;
 
     if (!state.query) return true;
@@ -433,6 +446,7 @@ function getVisibleCards() {
       card.label,
       card.rarity,
       card.originalBackgroundType,
+      card.originalIsShiny ? "shiny" : "non shiny",
     ]
       .join(" ")
       .toLowerCase();
@@ -443,6 +457,7 @@ function getVisibleCards() {
 function renderCard(card, options = {}) {
   const node = els.template.content.firstElementChild.cloneNode(true);
   const decision = getDecision(card);
+  const isShiny = getShinyDecision(card);
 
   node.dataset.cardId = card.id;
   node.dataset.seriesTone = String((options.seriesIndex || 0) % 6);
@@ -455,6 +470,8 @@ function renderCard(card, options = {}) {
   node.classList.toggle("marked-simple", decision === "simple");
   node.classList.toggle("marked-other", decision === "other");
   node.classList.toggle("marked-delete", decision === "delete");
+  node.classList.toggle("marked-shiny", isShiny);
+  node.classList.toggle("shiny-changed", hasShinyChange(card));
   node.querySelector(".dex-number").textContent = `#${String(card.dexId).padStart(4, "0")}`;
   node.querySelector("h2").textContent = card.zhName ? `${card.name} / ${card.zhName}` : card.name;
   node.querySelector(".card-code").textContent = formatCardCode(card);
@@ -477,6 +494,12 @@ function renderCard(card, options = {}) {
     button.addEventListener("click", () => setDecision(card, action));
   }
 
+  for (const button of node.querySelectorAll(".shiny-choice")) {
+    const value = button.dataset.shiny === "true";
+    button.classList.toggle("active", isShiny === value);
+    button.addEventListener("click", () => setShinyDecision(card, value));
+  }
+
   return node;
 }
 
@@ -494,6 +517,24 @@ function getDecision(card) {
   return state.decisions.get(card.id) || card.originalBackgroundType;
 }
 
+function setShinyDecision(card, isShiny) {
+  if (isShiny === card.originalIsShiny) {
+    state.shinyDecisions.delete(card.id);
+  } else {
+    state.shinyDecisions.set(card.id, isShiny);
+  }
+  persistDecisions();
+  render();
+}
+
+function getShinyDecision(card) {
+  return state.shinyDecisions.has(card.id) ? state.shinyDecisions.get(card.id) : card.originalIsShiny;
+}
+
+function hasShinyChange(card) {
+  return state.shinyDecisions.has(card.id) && state.shinyDecisions.get(card.id) !== card.originalIsShiny;
+}
+
 function getDecisionLabel(decision) {
   if (decision === "content") return "内容";
   if (decision === "simple") return "简单";
@@ -505,12 +546,14 @@ function getDecisionLabel(decision) {
 function updateSummary(visibleCount) {
   const counts = countCards(state.cards, (card) => card.originalBackgroundType);
   const decisionCounts = countCards(Array.from(state.decisions.values()), (value) => value);
+  const shinyChanges = state.shinyDecisions.size;
   els.summary.textContent =
     `显示 ${visibleCount} / 全部 ${state.cards.length}` +
     ` / C ${counts.content || 0}` +
     ` / S ${counts.simple || 0}` +
     ` / O ${counts.other || 0}` +
     ` / 已改 ${state.decisions.size}` +
+    ` / Shiny ${shinyChanges}` +
     ` / 删除 ${decisionCounts.delete || 0}`;
 }
 
@@ -554,21 +597,31 @@ async function saveResults() {
 
 function buildResultsPayload() {
   const decisions = Object.fromEntries(state.decisions);
+  const shinyDecisions = Object.fromEntries(state.shinyDecisions);
   return {
     source: "unified-card-review",
     generatedAt: new Date().toISOString(),
     totalCards: state.cards.length,
     decisions,
+    shinyDecisions,
     contentIds: filterDecisionIds(decisions, "content"),
     simpleIds: filterDecisionIds(decisions, "simple"),
     otherIds: filterDecisionIds(decisions, "other"),
     deleteIds: filterDecisionIds(decisions, "delete"),
+    shinyIds: filterShinyIds(shinyDecisions, true),
+    nonShinyIds: filterShinyIds(shinyDecisions, false),
   };
 }
 
 function filterDecisionIds(decisions, action) {
   return Object.entries(decisions)
     .filter(([, value]) => value === action)
+    .map(([cardId]) => cardId);
+}
+
+function filterShinyIds(decisions, isShiny) {
+  return Object.entries(decisions)
+    .filter(([, value]) => Boolean(value) === isShiny)
     .map(([cardId]) => cardId);
 }
 
@@ -591,7 +644,8 @@ function formatCardCode(card) {
   const era = getMenuEraCode(card);
   const setCode = getMenuSetCode(card);
   const number = getMenuCardNumber(card);
-  return `[${language}] ${[era, setCode, number].filter(Boolean).join("-")} · ${card.label} · ${card.originalBackgroundType}`;
+  const shiny = getShinyDecision(card) ? "Shiny" : "Non-shiny";
+  return `[${language}] ${[era, setCode, number].filter(Boolean).join("-")} · ${card.label} · ${card.originalBackgroundType} · ${shiny}`;
 }
 
 function getMenuEraCode(card) {

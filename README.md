@@ -16,38 +16,69 @@ review.css                         审核页样式
 local-data.js                      当前卡库数据
 form-index.js                      宝可梦地区形态、Mega 等形态索引
 assets/cards/                      本地卡图，统一高度 825px 的 WebP
-scripts/apply-review-results.mjs   应用审核页保存的结果
-scripts/find-card.mjs              本地查卡工具
-scripts/refresh-card-images.mjs    按图片规则重抓并转成本地 WebP
+assets/icons/                      PWA 图标
+manifest.webmanifest               PWA manifest
+sw.js                              Service Worker
+```
+
+## 常用脚本
+
+```text
+scripts/01-add-card-json.mjs                  主流程第 1 步：添加指定 TCGdex card id 的 JSON 信息，不下载图片
+scripts/02-download-card-images.mjs           主流程第 2 步：按 JSON 里的 Scrydex 图源下载图片并转成本地 WebP
+scripts/maintenance-refresh-all-json.mjs      维护：刷新全量本地卡牌 JSON 信息，不下载图片
+scripts/maintenance-apply-review-results.mjs  维护：应用审核页保存的结果
+scripts/tool-find-card.mjs                    工具：本地查卡
+scripts/lib-version-utils.mjs                 公共库：写入 local-data.js 并同步缓存版本
+```
+
+## 添加新卡
+
+添加新卡分两步。
+
+第一步：生成或更新卡牌 JSON 信息。
+
+```sh
+node scripts/01-add-card-json.mjs swsh9-TG01 swsh12.5-GG01 sv10.5b-087
+```
+
+这个脚本只负责数据：
+
+- 主要从 TCGdex API 获取卡牌 metadata
+- 写入 `name`、`pokemonName`、`cardName`
+- 写入 Scrydex 图片来源
+- 不下载图片
+
+第二步：按 JSON 里的图源下载图片。
+
+```sh
+REFRESH_IMAGE_IDS="swsh9-TG01,swsh12.5-GG01,sv10.5b-087" node scripts/02-download-card-images.mjs
+```
+
+如果要刷新全量 JSON：
+
+```sh
+node scripts/maintenance-refresh-all-json.mjs
+```
+
+如果要刷新全量图片：
+
+```sh
+node scripts/02-download-card-images.mjs
 ```
 
 ## 数据源规则
 
 核心原则：
 
-1. **最终本地卡牌 id 优先用 TCGdex id**，例如 `me02.5-270`、`sv03.5-166`。
-2. **图片优先从 TCGdex 拿**。
-3. **TCGdex 没有图时，只用 Scrydex 兜底**。
-4. **PokemonTCG API 只用于查卡表、rarity、set、supertype、nationalPokedexNumbers 等元数据，不作为图片来源**。
-5. 公开网页只用于人工核对卡面，不作为常规图片下载源。
+1. 本地卡牌 id 使用 TCGdex card id，例如 `me02.5-270`、`sv03.5-166`。
+2. 卡牌 metadata 主要来自 TCGdex API。
+3. 图片来源必须是 Scrydex。
+4. 图片只拿 Scrydex 的 `/large`。
+5. 不从其他网站兜底下载图片。
+6. 禁止收录 Pokemon TCG Pocket。`A1/A2...`、`B1/B1a/B2...` 这类 Pocket 系列不属于实体卡。
 
-常见来源分工：
-
-```text
-TCGdex          最终 id、单卡详情、首选图片
-PokemonTCG API  卡表筛选、rarity、全国图鉴编号、发行日、PTCGO code
-Scrydex         TCGdex 缺图时的唯一图片兜底
-```
-
-不同 API 的 set id 可能不同。导入时必须映射到 TCGdex id：
-
-```text
-Ascended Heroes:
-PokemonTCG API set id = me2pt5
-TCGdex set id         = me02.5
-```
-
-禁止收录 Pokemon TCG Pocket。`A1/A2...`、`B1/B1a/B2...` 这类 Pocket 系列不属于实体卡。
+TCGdex 查不到 metadata 的少量卡会使用已有本地 JSON 信息兜底，但图片规则仍然只用 Scrydex。
 
 ## 图片规则
 
@@ -63,32 +94,75 @@ assets/cards/{tcgdexCardId}.webp
 height = 825px
 width  = 按原图比例自动缩放
 format = WebP
-alpha  = 尽量保留；来源没有透明图时允许不透明
+alpha  = 保留透明通道
 ```
-
-下载优先级：
-
-1. TCGdex `{image}/high.webp`
-2. TCGdex `{image}/low.webp`
-3. Scrydex `https://images.scrydex.com/pokemon/{cardId}/large`
-4. Scrydex `https://images.scrydex.com/pokemon/{cardId}/small`
-
-Scrydex 缺图时可能返回 Pokemon 卡背占位图，不能当作有效卡图保存。
 
 每张卡必须记录图片来源：
 
 ```js
 imageSource: {
-  provider: "TCGdex",
-  url: "https://assets.tcgdex.net/en/me/me02.5/270/high.webp"
+  provider: "Scrydex",
+  url: "https://images.scrydex.com/pokemon/swsh9tg-TG01/large"
 }
 ```
 
 允许的 `provider`：
 
 ```text
-TCGdex
 Scrydex
+```
+
+`02-download-card-images.mjs` 会：
+
+- 只读取 `imageSource.url`
+- 只尝试 Scrydex URL
+- 自动尝试已知 Scrydex 路径修正规则
+- 跳过 Scrydex 卡背占位图
+- 下载后转成高度 825 的 WebP
+- 保留 alpha
+- 下载失败时保留已有本地图片，并在 summary 里汇报
+
+运行 summary 会写到：
+
+```text
+tmp/02-download-card-images-summary.json
+```
+
+## Scrydex 路径规则
+
+一般规则：
+
+```text
+三位数字卡号去掉首位 0: 046 -> 46
+SV/TG/GG 子编号按对应子集规则保留大写前缀
+SM 小数系列去掉点: sm7.5 -> sm75
+非 SM 小数系列使用 pt: sv04.5 -> sv4pt5
+```
+
+已知特例：
+
+```text
+sv10.5b       -> zsv10pt5
+sv10.5w       -> rsv10pt5
+swsh4.5       -> swsh45
+swsh4.5 SV    -> swsh45sv-SV001
+swsh10.5      -> pgo-1
+swsh9 TG      -> swsh9tg-TG01
+swsh10 TG     -> swsh10tg-TG01
+swsh11 TG     -> swsh11tg-TG01
+swsh12 TG     -> swsh12tg-TG01
+swsh12.5      -> swsh12pt5
+swsh12.5 GG   -> swsh12pt5gg-GG01
+```
+
+示例：
+
+```text
+sv04.5-109     -> https://images.scrydex.com/pokemon/sv4pt5-109/large
+me02.5-218     -> https://images.scrydex.com/pokemon/me2pt5-218/large
+sm3.5-9        -> https://images.scrydex.com/pokemon/sm35-9/large
+swsh4.5-SV001  -> https://images.scrydex.com/pokemon/swsh45sv-SV001/large
+swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 ```
 
 ## local-data.js
@@ -109,27 +183,29 @@ Scrydex
 
 ```js
 {
-  id: "me02.5-270",
-  name: "Mega Scrafty",
-  image: "./assets/cards/me02.5-270.webp",
-  form: { key: "mega", label: "Mega", shortLabel: "Mega", rank: 22 },
+  id: "swsh9-TG01",
+  name: "Flareon",
+  pokemonName: "Flareon",
+  cardName: "Flareon",
+  image: "./assets/cards/swsh9-TG01.webp",
+  form: { key: "base", label: "Base", shortLabel: "Std", rank: 0 },
   isShiny: false,
   backgroundType: "content",
   eraCode: "",
   setDisplayCode: "",
-  ptcgoCode: "ASC",
-  setId: "me02.5",
-  setName: "Ascended Heroes",
-  number: "270",
-  printedNumber: "270/217",
-  rarity: "Mega Attack Rare",
-  label: "MAR",
-  releaseDate: "2026-01-30",
+  ptcgoCode: "BRS",
+  setId: "swsh9",
+  setName: "Brilliant Stars",
+  number: "TG01",
+  printedNumber: "TG01/TG30",
+  rarity: "Trainer Gallery Rare Holo",
+  label: "TG",
+  releaseDate: "2022-02-25",
   imageSource: {
-    provider: "TCGdex",
-    url: "https://assets.tcgdex.net/en/me/me02.5/270/high.webp"
+    provider: "Scrydex",
+    url: "https://images.scrydex.com/pokemon/swsh9tg-TG01/large"
   },
-  rank: 2
+  rank: 1
 }
 ```
 
@@ -164,11 +240,13 @@ backgroundType: "content" | "simple" | "other"
 常见 label / rank：
 
 ```text
-IR   Illustration rare           rank 1
-SIR  Special Illustration Rare   rank 2
-MAR  Mega Attack Rare            rank 2
-FA   Ultra Rare                  rank 3
-Promo                            rank 4
+IR     Illustration rare             rank 1
+SIR    Special Illustration Rare     rank 2
+MAR    Mega Attack Rare              rank 2
+TG     Trainer Gallery               rank 1
+GG     Galarian Gallery              rank 1
+FA     Ultra Rare                    rank 3
+Promo  Promo                         rank 4
 ```
 
 ## 本地运行
@@ -203,11 +281,11 @@ http://localhost:4178/review.html
 先查本地库：
 
 ```sh
-node scripts/find-card.mjs "SV-JTG-184"
-node scripts/find-card.mjs "sv09-184"
-node scripts/find-card.mjs "Charizard"
-node scripts/find-card.mjs "MEW 166"
-node scripts/find-card.mjs "Ascended Heroes"
+node scripts/tool-find-card.mjs "SV-JTG-184"
+node scripts/tool-find-card.mjs "sv09-184"
+node scripts/tool-find-card.mjs "Charizard"
+node scripts/tool-find-card.mjs "MEW 166"
+node scripts/tool-find-card.mjs "Ascended Heroes"
 ```
 
 网页下拉里显示的格式：
@@ -217,240 +295,4 @@ node scripts/find-card.mjs "Ascended Heroes"
 [EN] SV-JTG-184
 [EN] SWSH-BRS-154
 [EN] SV-PROMO-129
-```
-
-含义：
-
-```text
-[语言] 大时代-PTCGO代码-系列内编号
-```
-
-## 补卡流程
-
-### 1. 查卡表
-
-先用 PokemonTCG API 快速找目标卡表、rarity、supertype 和全国图鉴编号。
-
-例子：
-
-```text
-https://api.pokemontcg.io/v2/cards?q=set.id:me2pt5 rarity:"Illustration Rare"
-```
-
-只收录实体宝可梦卡时，必须排除：
-
-```text
-supertype != "Pokémon"
-```
-
-PokemonTCG API 返回的 `nationalPokedexNumbers` 可用于归入 `cardsByDex`。
-
-### 2. 映射 TCGdex id
-
-最终本地 `id` 必须优先用 TCGdex id。
-
-例子：
-
-```text
-PokemonTCG API: me2pt5-270
-TCGdex:         me02.5-270
-```
-
-查 TCGdex：
-
-```text
-https://api.tcgdex.net/v2/en/cards/me02.5-270
-https://api.tcgdex.net/v2/en/sets/me02.5
-```
-
-需要确认字段：
-
-- `id`
-- `name`
-- `localId`
-- `rarity`
-- `image`
-- `set.id`
-- `set.name`
-
-### 3. 下载图片
-
-优先 TCGdex：
-
-```text
-{image}/high.webp
-{image}/low.webp
-```
-
-TCGdex 没有图时，只用 Scrydex 兜底：
-
-```text
-https://images.scrydex.com/pokemon/{tcgdexCardId}/large
-https://images.scrydex.com/pokemon/{tcgdexCardId}/small
-```
-
-不要使用 PokemonTCG API 的图片 URL 作为兜底。
-
-### 4. 转成本地 WebP
-
-```sh
-magick input.png -resize x825 -background none -define webp:lossless=true assets/cards/{tcgdexCardId}.webp
-```
-
-如果输入已经是 WebP，也照样统一转一遍，确保高度和格式一致。
-
-### 5. 写入数据
-
-把卡加入 `local-data.js`：
-
-- `id` 使用 TCGdex id
-- `image` 指向本地 WebP
-- `setId` 使用 TCGdex set id
-- `ptcgoCode` 使用实体系列 code
-- `imageSource` 写真实下载来源
-- `setReleaseDates` 补系列发行日
-- `ptcgoCodesBySetName` 补系列名到 PTCGO code 的映射
-
-更新数据时脚本会自动同步版本：
-
-- `local-data.js` 顶层 `version`
-- `app.js` 的 `CACHE_VERSION`
-- `sw.js` 的 service worker cache name 和 app shell query
-- `index.html` / `review.html` 里的资源 query
-
-如果只需要手动对齐现有版本，可以运行：
-
-```bash
-node scripts/sync-version.mjs
-```
-
-如果需要主动升一个版本并同步所有引用，可以运行：
-
-```bash
-node scripts/sync-version.mjs --bump
-```
-
-## 审核分类
-
-打开：
-
-```text
-review.html
-```
-
-顶部可以筛选：
-
-- 全部
-- content
-- simple
-- other
-
-每张卡有四个按钮：
-
-- 内容
-- 简单
-- 其他
-- 删除
-
-当前分类会默认选中。只有手动改过的卡会被保存。
-
-保存后会生成：
-
-```text
-ptcg-review-YYYY-MM-DD.json
-```
-
-应用审核结果：
-
-```sh
-node scripts/apply-review-results.mjs ptcg-review-YYYY-MM-DD.json
-```
-
-这个脚本会：
-
-- 更新 `local-data.js`
-- 删除被标记为删除的本地图片
-
-保存 review 文件本身不会自动修改卡库。
-
-## 发布
-
-GitHub Pages 使用 `main` 分支根目录。
-
-必须保留：
-
-- `index.html`
-- `app.js`
-- `styles.css`
-- `form-index.js`
-- `local-data.js`
-- `assets/cards/`
-
-自用审核页可以留在仓库里：
-
-- `review.html`
-- `review.js`
-- `review.css`
-
-## 常用检查
-
-检查脚本语法：
-
-```sh
-node --check app.js
-node --check review.js
-node --check scripts/apply-review-results.mjs
-node --check scripts/find-card.mjs
-node --check scripts/refresh-card-images.mjs
-```
-
-检查图片高度：
-
-```sh
-find assets/cards -type f -name '*.webp' -print0 \
-  | xargs -0 magick identify -format '%h %m %i\n' \
-  | awk '$1 != 825 || $2 != "WEBP" { print }'
-```
-
-检查数据统计：
-
-```sh
-node - <<'NODE'
-const fs = require("fs");
-const data = JSON.parse(fs.readFileSync("local-data.js", "utf8")
-  .replace(/^window\.PTCG_LOCAL_DATA = /, "")
-  .replace(/;\s*$/, ""));
-const counts = { content: 0, simple: 0, other: 0 };
-let cards = 0;
-for (const [, list] of data.cardsByDex) {
-  for (const card of list) {
-    cards += 1;
-    counts[card.backgroundType] += 1;
-  }
-}
-console.log({ cards, dexWithCards: data.cardsByDex.length, counts });
-NODE
-```
-
-检查某个系列来源：
-
-```sh
-node - <<'NODE'
-const fs = require("fs");
-const data = JSON.parse(fs.readFileSync("local-data.js", "utf8")
-  .replace(/^window\.PTCG_LOCAL_DATA = /, "")
-  .replace(/;\s*$/, ""));
-const cards = [];
-for (const [, list] of data.cardsByDex) {
-  for (const card of list) {
-    if (card.setId === "me02.5") cards.push(card);
-  }
-}
-const providers = {};
-for (const card of cards) {
-  providers[card.imageSource?.provider || "missing"] =
-    (providers[card.imageSource?.provider || "missing"] || 0) + 1;
-}
-console.log({ cards: cards.length, providers });
-NODE
 ```
