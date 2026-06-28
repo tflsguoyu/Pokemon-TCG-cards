@@ -94,7 +94,7 @@ function buildLocalCard(card, data) {
     cardName,
     image: `./${CARD_DIR}/${card.id}.webp`,
     form: classifyForm(cardName),
-    isShiny: false,
+    isShiny: isShinyCard(card),
     backgroundType: "content",
     eraCode: getEraCode(card.set?.id || card.id),
     setDisplayCode: getSetDisplayCode(card.set?.id || ""),
@@ -207,6 +207,11 @@ function classifyForm(name) {
   return match || { key: "base", label: "Base", rank: 0 };
 }
 
+function isShinyCard(card) {
+  const description = String(card.description || "").toLowerCase();
+  return description.includes("different color than usual");
+}
+
 function getLabelAndRank(card) {
   const rarity = String(card.rarity || "").toLowerCase();
   if (String(card.localId || "").startsWith("TG")) return { label: "TG", rank: 1 };
@@ -220,6 +225,7 @@ function getLabelAndRank(card) {
 
 function getEraCode(setId) {
   if (["dc1", "g1"].includes(String(setId))) return "XY";
+  if (String(setId).startsWith("bw")) return "BW";
   if (String(setId).startsWith("swsh")) return "SWSH";
   if (String(setId).startsWith("sv")) return "SV";
   if (String(setId).startsWith("sm")) return "SM";

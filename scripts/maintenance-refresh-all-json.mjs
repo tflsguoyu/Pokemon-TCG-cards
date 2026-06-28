@@ -127,7 +127,7 @@ function refreshLocalCard(card, remote, currentDexId) {
   card.cardName = cardName;
   card.image = `./${CARD_DIR}/${card.id}.webp`;
   card.form = classifyForm(cardName);
-  card.isShiny = Boolean(card.isShiny);
+  card.isShiny = isShinyCard(remote) || Boolean(card.isShiny);
   card.backgroundType = card.backgroundType || "content";
   card.eraCode = getEraCode(setId);
   card.setDisplayCode = getSetDisplayCode(setId);
@@ -220,6 +220,11 @@ function classifyForm(name) {
   return forms.find((form) => form.pattern.test(normalized)) || { key: "base", label: "Base", rank: 0 };
 }
 
+function isShinyCard(source) {
+  const description = String(source?.description || "").toLowerCase();
+  return description.includes("different color than usual");
+}
+
 function getLabelAndRank(source, existing) {
   const rarity = String(source?.rarity || "").toLowerCase();
   const localId = String(source?.localId || existing?.number || "");
@@ -245,6 +250,7 @@ function getLabelAndRank(source, existing) {
 function getEraCode(setId) {
   if (["dc1", "g1"].includes(String(setId))) return "XY";
   if (String(setId).startsWith("me")) return "ME";
+  if (String(setId).startsWith("bw")) return "BW";
   if (String(setId).startsWith("swsh")) return "SWSH";
   if (String(setId).startsWith("sv")) return "SV";
   if (String(setId).startsWith("sm")) return "SM";
