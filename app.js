@@ -1,4 +1,4 @@
-const CACHE_VERSION = 152;
+const CACHE_VERSION = 191;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -13,6 +13,10 @@ const NATIONAL_DEX_RANGES = {
 };
 
 const REGIONAL_FORM_KEYS = new Set(["alolan", "galarian", "hisuian", "paldean"]);
+const COLUMN_STORAGE_KEYS = {
+  desktop: "ptcg.index.desktopColumns",
+  mobile: "ptcg.index.mobileColumns",
+};
 
 const state = {
   species: [],
@@ -28,6 +32,8 @@ const state = {
     content: true,
     simple: true,
   },
+  desktopColumns: 6,
+  mobileColumns: 2,
 };
 
 const els = {
@@ -41,6 +47,8 @@ const els = {
   shinyOnly: document.querySelector("#shinyOnlyInput"),
   contentBackground: document.querySelector("#contentBackgroundInput"),
   simpleBackground: document.querySelector("#simpleBackgroundInput"),
+  columnsInput: document.querySelector("#columnsInput"),
+  columnsCount: document.querySelector("#columnsCount"),
   withImagesCount: document.querySelector("#withImagesCount"),
   totalSummaryCount: document.querySelector("#totalSummaryCount"),
   imageDialog: document.querySelector("#imageDialog"),
@@ -69,6 +77,8 @@ async function init() {
 }
 
 function wireControls() {
+  configureColumnControl();
+
   els.search.addEventListener("input", () => {
     state.query = els.search.value.trim().toLowerCase();
     render();
@@ -119,6 +129,54 @@ function wireControls() {
   els.candidateDialog.addEventListener("click", (event) => {
     if (event.target === els.candidateDialog) els.candidateDialog.close();
   });
+}
+
+function configureColumnControl() {
+  const mediaQuery = window.matchMedia("(max-width: 720px)");
+  state.desktopColumns = readStoredColumns(COLUMN_STORAGE_KEYS.desktop, state.desktopColumns, 6, 55);
+  state.mobileColumns = readStoredColumns(COLUMN_STORAGE_KEYS.mobile, state.mobileColumns, 2, 10);
+
+  const applyColumnRange = () => {
+    const isMobile = mediaQuery.matches;
+    const min = isMobile ? 2 : 6;
+    const max = isMobile ? 10 : 55;
+    const value = isMobile ? state.mobileColumns : state.desktopColumns;
+    els.columnsInput.min = String(min);
+    els.columnsInput.max = String(max);
+    els.columnsInput.value = String(clamp(value, min, max));
+    updateGridColumns();
+  };
+
+  els.columnsInput.addEventListener("input", () => {
+    const next = Number(els.columnsInput.value);
+    if (mediaQuery.matches) {
+      state.mobileColumns = next;
+      localStorage.setItem(COLUMN_STORAGE_KEYS.mobile, String(next));
+    } else {
+      state.desktopColumns = next;
+      localStorage.setItem(COLUMN_STORAGE_KEYS.desktop, String(next));
+    }
+    updateGridColumns();
+  });
+
+  mediaQuery.addEventListener("change", applyColumnRange);
+  applyColumnRange();
+}
+
+function updateGridColumns() {
+  const columns = Number(els.columnsInput.value);
+  els.columnsCount.textContent = columns;
+  els.grid.style.setProperty("--grid-columns", String(columns));
+  els.grid.classList.toggle("image-only", columns > 10);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readStoredColumns(key, fallback, min, max) {
+  const stored = Number(localStorage.getItem(key));
+  return Number.isFinite(stored) ? clamp(stored, min, max) : fallback;
 }
 
 function restoreLocalData() {
@@ -183,10 +241,17 @@ function getScopedSpecies() {
     const hasCards = state.cardsByDex.has(mon.id);
     const zhName = state.zhNamesByDex.get(mon.id) || "";
     const inRange = mon.id >= start && mon.id <= end;
-    const queryText = `${String(mon.id).padStart(4, "0")} ${mon.name} ${zhName}`.toLowerCase();
+    const tagText = getSpeciesTagText(mon.id);
+    const queryText = `${String(mon.id).padStart(4, "0")} ${mon.name} ${zhName} ${tagText}`.toLowerCase();
     const matchesQuery = !state.query || queryText.includes(state.query);
     return inRange && matchesQuery;
   });
+}
+
+function getSpeciesTagText(dexId) {
+  return (state.cardsByDex.get(dexId) || [])
+    .flatMap((card) => (Array.isArray(card.tags) ? card.tags : []))
+    .join(" ");
 }
 
 function hasVisibleCardImage(dexId) {

@@ -10,6 +10,9 @@
 index.html                         对外展示页
 app.js                             对外页逻辑
 styles.css                         对外页样式
+tags.html                          内容标签浏览页
+tags.js                            内容标签页逻辑
+tags.css                           内容标签页样式
 review.html                        自用审核页
 review.js                          审核页逻辑
 review.css                         审核页样式
@@ -191,6 +194,7 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
   form: { key: "base", label: "Base", rank: 0 },
   isShiny: false,
   backgroundType: "content",
+  tags: ["forest", "trees", "flowers", "solo", "peaceful", "green"],
   eraCode: "",
   setDisplayCode: "",
   ptcgoCode: "BRS",
@@ -229,6 +233,7 @@ form.pattern
 ```js
 isShiny: true | false
 backgroundType: "content" | "simple" | "other"
+tags: string[]
 ```
 
 `backgroundType` 含义：
@@ -236,6 +241,31 @@ backgroundType: "content" | "simple" | "other"
 - `content`：背景有具体内容、场景、构图
 - `simple`：背景是简单颜色、纹理、纯色或普通全图背景
 - `other`：不是这两类，或者保留但不参与这两个背景分类
+
+`tags` 只给 `backgroundType: "content"` 的卡使用，用来描述图面内容。标签使用英文小写短词组，优先服务搜索和主题页浏览；不要重复写已有 metadata，例如系列名、稀有度、卡牌编号。
+
+标签类型包括：
+
+```text
+场景地点        forest, beach, underwater, city, room, garden, mountain
+自然元素        trees, leaves, flowers, water, clouds, moon, stars, snow
+人造物 / 道具   window, bed, books, food, table, bridge, train, lamp
+动作状态        sleeping, eating, flying, swimming, playing, resting
+关系构图        solo, pair, group, partner, trainer, close-up, wide shot
+情绪氛围        cute, cozy, peaceful, playful, lonely, mysterious, epic
+视觉风格        simple, minimal, colorful, pastel, dark, soft, graphic
+颜色            pink, blue, green, yellow, purple, red, white, warm colors
+时间 / 光线     day, night, sunset, moonlight, sunlight, glowing, shadow
+生物主题        bird, fish, cat, dog, dragon, bug, mouse, turtle
+```
+
+不要使用收藏主题标签，例如 `starter`、`eeveelution`、`legendary`、`tag team`、`trainer gallery`。
+
+分批应用 tags：
+
+```sh
+node scripts/maintenance-apply-content-tags.mjs tmp/content-tags-batch-001.json
+```
 
 常见 label / rank：
 

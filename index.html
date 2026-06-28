@@ -11,7 +11,7 @@
     <title>PTCG 全国图鉴 / National Dex</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css?v=152" />
+    <link rel="stylesheet" href="./styles.css?v=191" />
   </head>
   <body>
     <header class="topbar">
@@ -20,6 +20,10 @@
           <p class="eyebrow">Pokemon TCG</p>
           <h1>全国图鉴 / National Dex</h1>
         </div>
+        <nav class="page-links" aria-label="页面 / Pages">
+          <a href="./tags.html">标签</a>
+          <a href="./review.html">审核</a>
+        </nav>
       </div>
       <section class="controls" aria-label="筛选 / Filters">
         <label class="search">
@@ -86,6 +90,13 @@
             </span>
           </button>
         </div>
+        <label class="density-control">
+          <span class="tool-label">
+            <span>每行 <span id="columnsCount" class="inline-count">6</span></span>
+            <span>Columns</span>
+          </span>
+          <input id="columnsInput" type="range" min="6" max="55" value="6" />
+        </label>
       </div>
     </header>
 
@@ -104,7 +115,7 @@
         </div>
         <div class="image-stage">
           <img alt="" loading="lazy" />
-          <div class="empty-state">暂无卡图 / No image</div>
+          <div class="empty-state" aria-label="暂无卡图 / No image"></div>
         </div>
         <div class="variant-picker">
           <select></select>
@@ -128,8 +139,8 @@
       </figure>
     </dialog>
 
-    <script src="./form-index.js?v=152"></script>
-    <script src="./local-data.js?v=152"></script>
-    <script src="./app.js?v=152"></script>
+    <script src="./form-index.js?v=191"></script>
+    <script src="./local-data.js?v=191"></script>
+    <script src="./app.js?v=191"></script>
   </body>
 </html>
