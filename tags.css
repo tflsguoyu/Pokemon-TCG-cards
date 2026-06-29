@@ -80,7 +80,7 @@ h1 {
 .page-links a {
   display: inline-grid;
   place-items: center;
-  min-width: 54px;
+  min-width: 92px;
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--line);
