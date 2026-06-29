@@ -54,6 +54,11 @@ button {
   align-items: end;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
+}
+
+.brand > div {
+  min-width: 0;
 }
 
 .eyebrow {
@@ -387,35 +392,108 @@ h3 {
 }
 
 @media (max-width: 720px) {
+  .tag-topbar {
+    gap: 6px;
+    padding: 6px clamp(10px, 3vw, 16px);
+  }
+
   .brand {
-    align-items: start;
-    flex-direction: column;
+    width: 100%;
+    align-items: center;
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .eyebrow {
+    margin-bottom: 0;
+    font-size: 9px;
   }
 
   h1 {
-    font-size: 22px;
-    white-space: normal;
+    overflow: hidden;
+    font-size: 20px;
+    text-overflow: ellipsis;
   }
 
   .page-links {
-    width: 100%;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 3px;
+    width: auto;
   }
 
   .page-links a {
-    flex: 1;
+    flex: none;
+    min-width: 74px;
+    height: 21px;
+    padding: 0 6px;
+    font-size: 10px;
   }
 
   .tag-rail {
-    grid-auto-columns: 58px;
+    grid-auto-columns: 52px;
+    gap: 4px;
   }
 
   .tag-controls {
     grid-template-columns: auto minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .clear-tags {
+    width: 50px;
+    min-height: 39px;
+    font-size: 11px;
+  }
+
+  .tag-button {
+    grid-template-rows: 15px 12px 10px;
+    height: 39px;
+    padding: 3px 3px;
+  }
+
+  .tag-icon {
+    font-size: 15px;
+  }
+
+  .tag-name {
+    font-size: 9px;
+  }
+
+  .tag-count {
+    font-size: 8px;
   }
 
   .density-control {
     grid-column: 1 / -1;
     grid-template-columns: auto minmax(0, 1fr);
+    min-height: 34px;
+    padding: 3px 8px;
+  }
+
+  .tool-label span:first-child,
+  .tool-label span:last-child {
+    font-size: 10px;
+  }
+
+  main {
+    padding-top: 8px;
+  }
+
+  .tag-summary {
+    margin-bottom: 8px;
+  }
+
+  .selected-tags {
+    font-size: 11px;
+  }
+
+  h2 {
+    font-size: 18px;
+  }
+
+  .result-count {
+    font-size: 24px;
   }
 
   .tag-card-grid {

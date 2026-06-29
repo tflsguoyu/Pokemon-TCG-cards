@@ -1,4 +1,4 @@
-const CACHE_VERSION = 201;
+const CACHE_VERSION = 203;
 
 const FEATURED_TAGS = [
   ["sleeping", "💤"],
@@ -134,21 +134,25 @@ function restoreLocalData() {
   if (!data || data.version !== CACHE_VERSION) return false;
 
   const cards = [];
+  const cardsById = new Map();
   const zhNames = new Map((data.zhNames || []).map(([id, name]) => [Number(id), name]));
   const setReleaseDates = new Map(data.setReleaseDates || []);
 
   for (const [dexId, dexCards] of data.cardsByDex || []) {
     for (const card of dexCards || []) {
       if (card.backgroundType !== "content" || !Array.isArray(card.tags) || !card.image) continue;
+      if (cardsById.has(card.id)) continue;
       const normalizedTags = Array.from(new Set(card.tags.map((tag) => String(tag).trim()).filter(Boolean)));
       if (!normalizedTags.length) continue;
-      cards.push({
+      const uniqueCard = {
         ...card,
         dexId: Number(dexId),
         zhName: zhNames.get(Number(dexId)) || "",
         tags: normalizedTags,
         releaseTime: getCardReleaseTime(card, setReleaseDates),
-      });
+      };
+      cardsById.set(card.id, uniqueCard);
+      cards.push(uniqueCard);
       for (const tag of normalizedTags) {
         state.counts.set(tag, (state.counts.get(tag) || 0) + 1);
       }
