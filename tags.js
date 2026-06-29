@@ -1,4 +1,4 @@
-const CACHE_VERSION = 191;
+const CACHE_VERSION = 195;
 
 const FEATURED_TAGS = [
   ["sleeping", "💤"],
@@ -37,7 +37,7 @@ const FEATURED_TAGS = [
 
 const COLUMN_STORAGE_KEYS = {
   desktop: "ptcg.tags.desktopColumns",
-  mobile: "ptcg.tags.mobileColumns",
+  mobile: "ptcg.tags.mobileColumns.v2",
 };
 
 const state = {
@@ -45,7 +45,7 @@ const state = {
   counts: new Map(),
   selectedTags: new Set(),
   desktopColumns: 7,
-  mobileColumns: 1,
+  mobileColumns: 3,
 };
 
 const els = {
@@ -111,6 +111,11 @@ function updateGridColumns() {
   const columns = Number(els.columnsInput.value);
   els.columnsCount.textContent = columns;
   els.cardGrid.style.setProperty("--grid-columns", String(columns));
+  els.cardGrid.classList.toggle("image-only", columns > getImageOnlyColumnThreshold());
+}
+
+function getImageOnlyColumnThreshold() {
+  return window.matchMedia("(max-width: 600px)").matches ? 3 : 10;
 }
 
 function clamp(value, min, max) {
@@ -118,7 +123,9 @@ function clamp(value, min, max) {
 }
 
 function readStoredColumns(key, fallback, min, max) {
-  const stored = Number(localStorage.getItem(key));
+  const raw = localStorage.getItem(key);
+  if (raw === null) return fallback;
+  const stored = Number(raw);
   return Number.isFinite(stored) ? clamp(stored, min, max) : fallback;
 }
 

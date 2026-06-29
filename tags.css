@@ -253,6 +253,27 @@ h2 {
   min-width: 0;
 }
 
+.tag-card-grid.image-only {
+  gap: 2px;
+}
+
+.tag-card-grid.image-only .tag-card {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-color: rgba(217, 226, 232, 0.38);
+  box-shadow: none;
+}
+
+.tag-card-grid.image-only .tag-card-meta {
+  display: none;
+}
+
+.tag-card-grid.image-only .tag-card-image {
+  border: 0;
+  border-radius: 0;
+}
+
 .tag-card {
   display: grid;
   gap: 7px;

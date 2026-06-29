@@ -1,4 +1,4 @@
-const CACHE_VERSION = 191;
+const CACHE_VERSION = 195;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -167,7 +167,11 @@ function updateGridColumns() {
   const columns = Number(els.columnsInput.value);
   els.columnsCount.textContent = columns;
   els.grid.style.setProperty("--grid-columns", String(columns));
-  els.grid.classList.toggle("image-only", columns > 10);
+  els.grid.classList.toggle("image-only", columns > getImageOnlyColumnThreshold());
+}
+
+function getImageOnlyColumnThreshold() {
+  return window.matchMedia("(max-width: 720px)").matches ? 3 : 10;
 }
 
 function clamp(value, min, max) {
@@ -175,7 +179,9 @@ function clamp(value, min, max) {
 }
 
 function readStoredColumns(key, fallback, min, max) {
-  const stored = Number(localStorage.getItem(key));
+  const raw = localStorage.getItem(key);
+  if (raw === null) return fallback;
+  const stored = Number(raw);
   return Number.isFinite(stored) ? clamp(stored, min, max) : fallback;
 }
 
@@ -352,20 +358,37 @@ function renderDexCard(mon) {
     }
   };
 
-  const getActiveCards = () => {
+  const getCardsForForm = (formKey) => {
     if (state.shinyOnly) {
       return sortCardsForMenu(cards.filter((card) => card.isShiny));
     }
 
-    if (activeFormKey === "base") {
+    if (formKey === "base") {
       return sortCardsForMenu(cards.filter((card) => !isRegionalForm(card.form) && isCardVisibleByBackground(card)));
     }
 
-    if (activeFormKey === "shiny") {
+    if (formKey === "shiny") {
       return sortCardsForMenu(cards.filter((card) => card.isShiny));
     }
 
-    return sortCardsForMenu(cards.filter((card) => card.form.key === activeFormKey && isCardVisibleByBackground(card)));
+    return sortCardsForMenu(cards.filter((card) => card.form.key === formKey && isCardVisibleByBackground(card)));
+  };
+
+  const getFallbackRegionalFormKey = () => {
+    return forms.find((form) => getCardsForForm(form.key).some((card) => getImageUrls(card, "low").length > 0))?.key || "";
+  };
+
+  const getActiveCards = () => {
+    const activeCards = getCardsForForm(activeFormKey);
+    if (activeFormKey !== "base" || state.shinyOnly || activeCards.some((card) => getImageUrls(card, "low").length > 0)) {
+      return activeCards;
+    }
+
+    const fallbackFormKey = getFallbackRegionalFormKey();
+    if (!fallbackFormKey) return activeCards;
+    activeFormKey = fallbackFormKey;
+    updateFormButtons();
+    return getCardsForForm(activeFormKey);
   };
 
   const rebuildOptions = () => {
