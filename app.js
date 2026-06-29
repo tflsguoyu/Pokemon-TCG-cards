@@ -1,4 +1,4 @@
-const CACHE_VERSION = 195;
+const CACHE_VERSION = 199;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -134,11 +134,11 @@ function wireControls() {
 function configureColumnControl() {
   const mediaQuery = window.matchMedia("(max-width: 720px)");
   state.desktopColumns = readStoredColumns(COLUMN_STORAGE_KEYS.desktop, state.desktopColumns, 6, 55);
-  state.mobileColumns = readStoredColumns(COLUMN_STORAGE_KEYS.mobile, state.mobileColumns, 2, 10);
+  state.mobileColumns = readStoredColumns(COLUMN_STORAGE_KEYS.mobile, state.mobileColumns, 1, 10);
 
   const applyColumnRange = () => {
     const isMobile = mediaQuery.matches;
-    const min = isMobile ? 2 : 6;
+    const min = isMobile ? 1 : 6;
     const max = isMobile ? 10 : 55;
     const value = isMobile ? state.mobileColumns : state.desktopColumns;
     els.columnsInput.min = String(min);
@@ -171,7 +171,7 @@ function updateGridColumns() {
 }
 
 function getImageOnlyColumnThreshold() {
-  return window.matchMedia("(max-width: 720px)").matches ? 3 : 10;
+  return window.matchMedia("(max-width: 720px)").matches ? 2 : 10;
 }
 
 function clamp(value, min, max) {

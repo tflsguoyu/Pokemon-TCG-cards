@@ -1,14 +1,14 @@
-const CACHE_NAME = "ptcg-national-dex-v195";
+const CACHE_NAME = "ptcg-national-dex-v199";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./tags.html",
-  "./styles.css?v=195",
-  "./tags.css?v=195",
-  "./form-index.js?v=195",
-  "./local-data.js?v=195",
-  "./app.js?v=195",
-  "./tags.js?v=195",
+  "./styles.css?v=199",
+  "./tags.css?v=199",
+  "./form-index.js?v=199",
+  "./local-data.js?v=199",
+  "./app.js?v=199",
+  "./tags.js?v=199",
   "./manifest.webmanifest",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
