@@ -60,18 +60,30 @@ body {
 }
 
 .page-links a {
-  display: inline-grid;
-  place-items: center;
-  min-width: 92px;
-  height: 24px;
-  padding: 0 12px;
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  min-width: 54px;
+  min-height: 34px;
+  padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   color: var(--blue);
-  font-size: 12px;
-  font-weight: 900;
+  line-height: 1.05;
+  text-align: center;
   text-decoration: none;
+}
+
+.page-links a span:first-child,
+.page-links a span:last-child {
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.page-links a span:last-child {
+  color: color-mix(in srgb, currentColor 76%, white);
 }
 
 .eyebrow {
@@ -703,9 +715,13 @@ h2 {
 
   .page-links a {
     flex: none;
-    min-width: 74px;
-    height: 21px;
-    padding: 0 6px;
+    min-width: 54px;
+    min-height: 30px;
+    padding: 3px 7px;
+  }
+
+  .page-links a span:first-child,
+  .page-links a span:last-child {
     font-size: 10px;
   }
 
