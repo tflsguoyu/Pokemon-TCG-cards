@@ -3,6 +3,7 @@ const BACKGROUND_TYPES = ["content", "simple", "other"];
 
 const state = {
   cards: [],
+  setsById: new Map(),
   decisions: new Map(),
   shinyDecisions: new Map(),
   query: "",
@@ -67,15 +68,19 @@ function wireControls() {
 
 function loadCards() {
   const data = window.PTCG_LOCAL_DATA || {};
-  const zhNames = new Map((data.zhNames || []).map(([id, name]) => [Number(id), name]));
+  const speciesCn = new Map((data.species_cn || []).map(([id, name]) => [Number(id), name]));
+  state.setsById = new Map(data.setsById || []);
   const cardsById = new Map();
 
   for (const [dexId, cardList] of data.cardsByDex || []) {
     for (const card of cardList) {
       if (cardsById.has(card.id)) continue;
+      const cardDexIds = getCardDexIds(card, Number(dexId));
       cardsById.set(card.id, {
         dexId: Number(dexId),
-        zhName: zhNames.get(Number(dexId)) || "",
+        dexIds: cardDexIds,
+        zhName: speciesCn.get(Number(dexId)) || "",
+        dexSearchText: getDexSearchText(cardDexIds, data.species || [], speciesCn),
         originalBackgroundType: normalizeBackgroundType(card.backgroundType),
         originalIsShiny: Boolean(card.isShiny),
         ...card,
@@ -97,15 +102,15 @@ function loadCards() {
 function compareSetCode(a, b) {
   return (
     getEraRank(a) - getEraRank(b) ||
-    String(a.eraCode || "").localeCompare(String(b.eraCode || "")) ||
+    getReviewEraCode(a).localeCompare(getReviewEraCode(b)) ||
     getSetNumber(a) - getSetNumber(b) ||
-    String(a.ptcgoCode || a.setId || "").localeCompare(String(b.ptcgoCode || b.setId || ""), undefined, { numeric: true })
+      String(getPtcgoCode(a) || a.setId || "").localeCompare(String(getPtcgoCode(b) || b.setId || ""), undefined, { numeric: true })
   );
 }
 
 function getEraRank(card) {
-  const era = getMenuEraCode(card);
-  const ranks = ["BASE", "EX", "DP", "PL", "HGSS", "BW", "XY", "SM", "SWSH", "SV", "ME"];
+  const era = getReviewEraCode(card);
+  const ranks = ["BASE", "EX", "DP", "PL", "HGSS", "BW", "XY", "SM", "SWSH", "SV", "ME", "简中"];
   const rank = ranks.indexOf(era);
   return rank === -1 ? 999 : rank;
 }
@@ -116,7 +121,7 @@ function getSetNumber(card) {
   if (popMatch) return Number(popMatch[1]) / 10;
   const match = id.match(/(?:me|sv|swsh|sm|xy|bw|dp|pl|hgss|ex|base)(\d+(?:\.\d+)?)/);
   if (match) return Number(match[1]);
-  if (/p$/.test(id) || /promo/i.test(card.setName || "") || /^PR-/i.test(card.ptcgoCode || "")) return 999;
+  if (/p$/.test(id) || /promo/i.test(getSetName(card)) || /^PR-/i.test(getPtcgoCode(card))) return 999;
   return 998;
 }
 
@@ -129,11 +134,11 @@ function compareCardNumber(a, b) {
 }
 
 function getCardNumberPrefix(card) {
-  return String(card.number || card.printedNumber || "").split("/")[0].match(/^[A-Za-z]+/)?.[0] || "";
+  return String(card.number || getPrintedNumber(card) || "").split("/")[0].match(/^[A-Za-z]+/)?.[0] || "";
 }
 
 function getCardNumberValue(card) {
-  const match = String(card.number || card.printedNumber || "").split("/")[0].match(/\d+/);
+  const match = String(card.number || getPrintedNumber(card) || "").split("/")[0].match(/\d+/);
   return match ? Number(match[0]) : 0;
 }
 
@@ -182,7 +187,7 @@ function render() {
 
   for (const group of groups) {
     const firstCard = group[0];
-    const era = getMenuEraCode(firstCard);
+    const era = getReviewEraCode(firstCard);
     const isEraStart = Boolean(currentEra && era !== currentEra);
     currentEra = era;
     seriesIndex += 1;
@@ -267,7 +272,7 @@ function getEraItems(groups) {
   const itemByEra = new Map();
 
   groups.forEach((group, index) => {
-    const era = getMenuEraCode(group[0]) || "其他";
+    const era = getReviewEraCode(group[0]) || "其他";
     const existing = itemByEra.get(era);
     if (existing) {
       existing.count += 1;
@@ -404,13 +409,13 @@ function renderEmptySlot() {
 }
 
 function getSeriesKey(card) {
-  return `${getEraRank(card)}-${getSetNumber(card)}-${card.setId || ""}-${card.ptcgoCode || ""}`;
+  return `${getEraRank(card)}-${getSetNumber(card)}-${card.setId || ""}-${getPtcgoCode(card)}`;
 }
 
 function getSeriesLabel(card) {
-  const era = getMenuEraCode(card);
+  const era = getReviewEraCode(card);
   const code = getMenuSetCode(card);
-  const setName = card.setName || card.setId || "";
+  const setName = getSetName(card);
   return [era, code, setName].filter(Boolean).join(" · ");
 }
 
@@ -420,7 +425,7 @@ function getSeriesCountLabel(group) {
 }
 
 function getSeriesNavLabel(card) {
-  const era = getMenuEraCode(card);
+  const era = getReviewEraCode(card);
   const code = getMenuSetCode(card);
   return [era, code].filter(Boolean).join(" ");
 }
@@ -436,13 +441,14 @@ function getVisibleCards() {
     if (!state.query) return true;
     const text = [
       card.dexId,
-      card.name,
+      card.dexSearchText,
+      card.cardName,
       card.zhName,
       card.id,
-      card.setName,
-      card.ptcgoCode,
+      getSetName(card),
+      getPtcgoCode(card),
       card.setId,
-      card.printedNumber,
+      getPrintedNumber(card),
       card.label,
       card.rarity,
       card.originalBackgroundType,
@@ -472,8 +478,8 @@ function renderCard(card, options = {}) {
   node.classList.toggle("marked-delete", decision === "delete");
   node.classList.toggle("marked-shiny", isShiny);
   node.classList.toggle("shiny-changed", hasShinyChange(card));
-  node.querySelector(".dex-number").textContent = `#${String(card.dexId).padStart(4, "0")}`;
-  node.querySelector("h2").textContent = card.zhName ? `${card.name} / ${card.zhName}` : card.name;
+  node.querySelector(".dex-number").textContent = formatDexLabel(card);
+  node.querySelector("h2").textContent = card.cardName;
   node.querySelector(".card-code").textContent = formatCardCode(card);
   node.querySelector(".status-pill").textContent = getDecisionLabel(decision);
 
@@ -482,7 +488,7 @@ function renderCard(card, options = {}) {
   const imageUrl = getImageUrl(card);
   if (imageUrl) {
     image.src = imageUrl;
-    image.alt = `${card.name} ${formatCardCode(card)}`;
+    image.alt = `${card.cardName} ${formatCardCode(card)}`;
     imageButton.addEventListener("click", () => openImage(card));
   } else {
     imageButton.classList.add("empty");
@@ -629,14 +635,23 @@ function openImage(card) {
   const imageUrl = getImageUrl(card);
   if (!imageUrl) return;
   els.dialogImage.src = imageUrl;
-  els.dialogImage.alt = `${card.name} ${formatCardCode(card)}`;
-  els.dialogCaption.textContent = `${card.name} · ${formatCardCode(card)}`;
+  els.dialogImage.alt = `${card.cardName} ${formatCardCode(card)}`;
+  els.dialogCaption.textContent = `${card.cardName} · ${formatCardCode(card)}`;
   els.imageDialog.showModal();
 }
 
 function getImageUrl(card) {
   const source = (card.imageSources || []).find((item) => item.low || item.high);
   return source?.low || source?.high || card.image || "";
+}
+
+function isSimplifiedChineseCard(card) {
+  const language = String(card.language || "").trim().toUpperCase();
+  return language === "CN";
+}
+
+function getReviewEraCode(card) {
+  return isSimplifiedChineseCard(card) ? "简中" : getMenuEraCode(card);
 }
 
 function formatCardCode(card) {
@@ -650,7 +665,8 @@ function formatCardCode(card) {
 
 function getMenuEraCode(card) {
   const id = String(card.setId || card.id || "").toLowerCase();
-  if (card.eraCode) return card.eraCode;
+  const setMeta = getSetMeta(card);
+  if (card.eraCode || setMeta.eraCode) return card.eraCode || setMeta.eraCode;
   if (id.startsWith("pop")) return "DP";
   if (id.startsWith("me")) return "ME";
   if (id.startsWith("sv")) return "SV";
@@ -663,21 +679,76 @@ function getMenuEraCode(card) {
   if (id.startsWith("hgss")) return "HGSS";
   if (id.startsWith("ex")) return "EX";
   if (id.startsWith("base")) return "BASE";
-  return card.setDisplayCode || "";
+  return getSetDisplayCode(card.setId);
 }
 
 function getMenuSetCode(card) {
-  const ptcgoCode = String(card.ptcgoCode || "").trim();
+  const ptcgoCode = getPtcgoCode(card);
   if (card.label === "Promo" || /^PR-/i.test(ptcgoCode)) return "PROMO";
-  const code = ptcgoCode || card.setDisplayCode || card.setId || card.setName || "";
+  const setMeta = getSetMeta(card);
+  const code = ptcgoCode || getSetDisplayCode(card.setId) || card.setId || setMeta.name || "";
   return String(code).toUpperCase();
 }
 
 function getMenuCardNumber(card) {
-  const number = String(card.number || card.printedNumber || "").split("/")[0];
+  if (card.variant?.number) {
+    return [card.number, card.variant.number].filter(Boolean).map(formatMenuNumberPart).join("-");
+  }
+  const number = String(card.number || getPrintedNumber(card) || "").split("/")[0];
+  return formatMenuNumberPart(number);
+}
+
+function getSetMeta(card) {
+  return state.setsById.get(card.setId) || {};
+}
+
+function getSetName(card) {
+  return getSetMeta(card).name || card.setId || "";
+}
+
+function getPtcgoCode(card) {
+  return String(getSetMeta(card).ptcgoCode || "").trim();
+}
+
+function getPrintedNumber(card) {
+  const number = String(card.number || "");
+  if (card.variant?.number) {
+    const variantNumber = String(card.variant.number || "");
+    const variantTotal = String(card.variant.total || "");
+    return variantTotal ? `${number}${variantNumber}/${variantTotal}` : `${number}${variantNumber}`;
+  }
+  const total = getSetMeta(card).total;
+  return number && total ? `${number}/${total}` : number;
+}
+
+function formatMenuNumberPart(number) {
   return /^\d+$/.test(number) ? String(Number(number)) : number;
+}
+
+function getSetDisplayCode(setId) {
+  const swshMatch = String(setId || "").match(/^swsh(\d+)(?:\.(\d+))?$/i);
+  if (swshMatch) return `SWSH${String(swshMatch[1]).padStart(2, "0")}${swshMatch[2] ? `.${swshMatch[2]}` : ""}`;
+  return String(setId || "").toUpperCase();
 }
 
 function normalizeBackgroundType(value) {
   return BACKGROUND_TYPES.includes(value) ? value : "other";
+}
+
+function getCardDexIds(card, fallbackDexId) {
+  const ids = Array.isArray(card.dexIds) && card.dexIds.length ? card.dexIds : [fallbackDexId];
+  return Array.from(new Set(ids.map(Number).filter((id) => Number.isFinite(id) && id > 0)));
+}
+
+function getDexSearchText(dexIds, species, speciesCn) {
+  const speciesById = new Map(species.map((mon) => [Number(mon.id), mon.name]));
+  return dexIds
+    .flatMap((dexId) => [String(dexId).padStart(4, "0"), speciesById.get(dexId) || "", speciesCn.get(dexId) || ""])
+    .join(" ");
+}
+
+function formatDexLabel(card) {
+  return getCardDexIds(card, card.dexId)
+    .map((dexId) => `#${String(dexId).padStart(4, "0")}`)
+    .join(" / ");
 }

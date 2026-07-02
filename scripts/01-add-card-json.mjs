@@ -17,6 +17,7 @@ mkdirSync(TMP_DIR, { recursive: true });
 
 const data = JSON.parse(readFileSync(DATA_PATH, "utf8").slice(DATA_PREFIX.length).replace(/;\s*$/, ""));
 const speciesByDex = new Map((data.species || []).map((species) => [Number(species.id), species.name]));
+const setsById = new Map(data.setsById || []);
 const cardsById = new Map();
 for (const [, cards] of data.cardsByDex || []) {
   for (const card of cards) cardsById.set(card.id, card);
@@ -49,7 +50,7 @@ for (const id of ids) {
       continue;
     }
 
-    addSetReleaseDate(data, card.set);
+    upsertSetMeta(data, card.set);
     addCard(data, Number(card.dexId[0]), buildLocalCard(card, data));
     summary.added += 1;
     summary.imageSourcesPrepared += 1;
@@ -83,26 +84,19 @@ function buildLocalCard(card, data) {
   const number = String(card.localId || "");
   const officialCount = card.set?.cardCount?.official || 0;
   const { label, rank } = getLabelAndRank(card);
-  const pokemonName = speciesByDex.get(Number(card.dexId?.[0])) || card.name || "";
-  const cardName = card.name || pokemonName;
+  const cardName = card.name || speciesByDex.get(Number(card.dexId?.[0])) || "";
   const imageSource = getScrydexImageSource(card);
 
   return {
     id: card.id,
-    name: cardName,
-    pokemonName,
+    language: "EN",
     cardName,
     image: `./${CARD_DIR}/${card.id}.webp`,
     form: classifyForm(cardName),
     isShiny: isShinyCard(card),
     backgroundType: "content",
-    eraCode: getEraCode(card.set?.id || card.id),
-    setDisplayCode: getSetDisplayCode(card.set?.id || ""),
-    ptcgoCode: getPtcgoCode(card, data),
     setId: card.set?.id || "",
-    setName: card.set?.name || "",
     number,
-    printedNumber: officialCount ? `${number}/${officialCount}` : number,
     rarity: card.rarity || "None",
     label,
     rank,
@@ -118,10 +112,8 @@ function getPtcgoCode(card, data) {
   if (direct) return direct;
 
   const setId = String(card.set?.id || "");
-  for (const [, cards] of data.cardsByDex || []) {
-    const existing = cards.find((item) => item.setId === setId && item.ptcgoCode);
-    if (existing) return existing.ptcgoCode;
-  }
+  const existingSet = setsById.get(setId);
+  if (existingSet?.ptcgoCode) return existingSet.ptcgoCode;
 
   const setNameKey = normalizeSetName(card.set?.name || "");
   const fromSetName = new Map(data.ptcgoCodesBySetName || []).get(setNameKey);
@@ -143,14 +135,20 @@ function addCard(data, dexId, card) {
   data.cardsByDex.push([dexId, [card]]);
 }
 
-function addSetReleaseDate(data, set) {
+function upsertSetMeta(data, set) {
   if (!set?.id) return;
-  const releaseDate = set.releaseDate || getTcgdexSet(set.id).releaseDate;
-  if (!releaseDate) return;
-  const dates = new Map(data.setReleaseDates || []);
-  if (dates.get(set.id) === releaseDate) return;
-  dates.set(set.id, releaseDate);
-  data.setReleaseDates = Array.from(dates.entries()).sort(([a], [b]) => String(a).localeCompare(String(b)));
+  const remoteSet = set.releaseDate ? set : getTcgdexSet(set.id);
+  const existing = setsById.get(set.id) || {};
+  const next = {
+    ...existing,
+    eraCode: existing.eraCode || getEraCode(set.id),
+    ptcgoCode: getPtcgoCode({ set }, data),
+    name: set.name || existing.name || "",
+    total: set.cardCount?.official || remoteSet.cardCount?.official || existing.total || "",
+    releaseDate: set.releaseDate || remoteSet.releaseDate || existing.releaseDate || "",
+  };
+  setsById.set(set.id, next);
+  data.setsById = Array.from(setsById.entries()).sort(([a], [b]) => String(a).localeCompare(String(b)));
 }
 
 function getScrydexImageSource(card) {
@@ -231,12 +229,6 @@ function getEraCode(setId) {
   if (String(setId).startsWith("sm")) return "SM";
   if (String(setId).startsWith("xy")) return "XY";
   return "";
-}
-
-function getSetDisplayCode(setId) {
-  const swshMatch = String(setId || "").match(/^swsh(\d+)(?:\.(\d+))?$/i);
-  if (swshMatch) return `SWSH${String(swshMatch[1]).padStart(2, "0")}${swshMatch[2] ? `.${swshMatch[2]}` : ""}`;
-  return String(setId || "").toUpperCase();
 }
 
 function compareCards(a, b) {

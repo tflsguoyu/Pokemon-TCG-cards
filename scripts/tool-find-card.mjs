@@ -9,22 +9,24 @@ if (!query) {
 
 const prefix = "window.PTCG_LOCAL_DATA = ";
 const data = JSON.parse(readFileSync("local-data.js", "utf8").slice(prefix.length).replace(/;\s*$/, ""));
-const zhNames = new Map((data.zhNames || []).map(([id, name]) => [Number(id), name]));
-const setReleaseDates = new Map(data.setReleaseDates || []);
+const speciesCn = new Map((data.species_cn || []).map(([id, name]) => [Number(id), name]));
+const setsById = new Map(data.setsById || []);
 const matches = [];
 
 for (const [dexId, cards] of data.cardsByDex || []) {
   for (const card of cards) {
+    const cardDexIds = getCardDexIds(card, Number(dexId));
     const haystack = [
       card.id,
-      card.name,
-      zhNames.get(Number(dexId)) || "",
+      card.cardName,
+      speciesCn.get(Number(dexId)) || "",
+      getDexSearchText(cardDexIds),
       card.setId,
-      card.setName,
-      card.ptcgoCode,
-      card.setDisplayCode,
+      getSetName(card),
+      getPtcgoCode(card),
+      getSetDisplayCode(card.setId),
       card.number,
-      card.printedNumber,
+      getPrintedNumber(card),
       formatCardCode(card),
       card.label,
       card.rarity,
@@ -36,20 +38,40 @@ for (const [dexId, cards] of data.cardsByDex || []) {
     if (!haystack.includes(query)) continue;
     matches.push({
       dexId: Number(dexId),
-      pokemon: card.name,
-      zhName: zhNames.get(Number(dexId)) || "",
+      dexIds: cardDexIds,
+      pokemon: getPrimaryPokemonName(card, Number(dexId)),
+      cardName: card.cardName,
+      zhName: speciesCn.get(Number(dexId)) || "",
       id: card.id,
       code: formatCardCode(card),
       label: card.label,
       rarity: card.rarity,
       backgroundType: card.backgroundType,
       isShiny: card.isShiny,
-      releaseDate: card.releaseDate || setReleaseDates.get(card.setId) || "",
+      releaseDate: card.releaseDate || getSetMeta(card).releaseDate || "",
       setId: card.setId,
-      setName: card.setName,
+      setName: getSetName(card),
       image: card.image || "",
     });
   }
+}
+
+function getCardDexIds(card, fallbackDexId) {
+  const ids = Array.isArray(card.dexIds) && card.dexIds.length ? card.dexIds : [fallbackDexId];
+  return Array.from(new Set(ids.map(Number).filter((id) => Number.isFinite(id) && id > 0)));
+}
+
+function getDexSearchText(dexIds) {
+  const speciesById = new Map((data.species || []).map((mon) => [Number(mon.id), mon.name]));
+  return dexIds
+    .flatMap((dexId) => [String(dexId).padStart(4, "0"), speciesById.get(dexId) || "", speciesCn.get(dexId) || ""])
+    .join(" ");
+}
+
+function getPrimaryPokemonName(card, fallbackDexId) {
+  const primaryDexId = Number(card.primaryDexId || getCardDexIds(card, fallbackDexId)[0] || fallbackDexId);
+  const species = (data.species || []).find((mon) => Number(mon.id) === primaryDexId);
+  return species?.name || "";
 }
 
 console.log(JSON.stringify(matches.slice(0, 100), null, 2));
@@ -67,7 +89,8 @@ function formatCardCode(card) {
 
 function getMenuEraCode(card) {
   const id = String(card.setId || card.id || "").toLowerCase();
-  if (card.eraCode) return card.eraCode;
+  const setMeta = getSetMeta(card);
+  if (card.eraCode || setMeta.eraCode) return card.eraCode || setMeta.eraCode;
   if (id.startsWith("me")) return "ME";
   if (id.startsWith("sv")) return "SV";
   if (id.startsWith("swsh")) return "SWSH";
@@ -79,16 +102,53 @@ function getMenuEraCode(card) {
   if (id.startsWith("hgss")) return "HGSS";
   if (id.startsWith("ex")) return "EX";
   if (id.startsWith("base")) return "BASE";
-  return card.setDisplayCode || "";
+  return getSetDisplayCode(card.setId);
 }
 
 function getMenuSetCode(card) {
-  const ptcgoCode = String(card.ptcgoCode || "").trim();
+  const ptcgoCode = getPtcgoCode(card);
   if (card.label === "Promo" || /^PR-/i.test(ptcgoCode)) return "PROMO";
-  return ptcgoCode || card.setDisplayCode || card.setId || card.setName || "";
+  const setMeta = getSetMeta(card);
+  return ptcgoCode || getSetDisplayCode(card.setId) || card.setId || setMeta.name || "";
 }
 
 function getMenuCardNumber(card) {
-  const number = String(card.number || card.printedNumber || "").split("/")[0];
+  if (card.variant?.number) {
+    return [card.number, card.variant.number].filter(Boolean).map(formatMenuNumberPart).join("-");
+  }
+  const number = String(card.number || getPrintedNumber(card) || "").split("/")[0];
+  return formatMenuNumberPart(number);
+}
+
+function getSetMeta(card) {
+  return setsById.get(card.setId) || {};
+}
+
+function getSetName(card) {
+  return getSetMeta(card).name || card.setId || "";
+}
+
+function getPtcgoCode(card) {
+  return String(getSetMeta(card).ptcgoCode || "").trim();
+}
+
+function getPrintedNumber(card) {
+  const number = String(card.number || "");
+  if (card.variant?.number) {
+    const variantNumber = String(card.variant.number || "");
+    const variantTotal = String(card.variant.total || "");
+    return variantTotal ? `${number}${variantNumber}/${variantTotal}` : `${number}${variantNumber}`;
+  }
+  const total = getSetMeta(card).total;
+  return number && total ? `${number}/${total}` : number;
+}
+
+function formatMenuNumberPart(number) {
   return /^\d+$/.test(number) ? String(Number(number)) : number;
+}
+
+function getSetDisplayCode(setId) {
+  const swshMatch = String(setId || "").match(/^swsh(\d+)(?:\.(\d+))?$/i);
+  if (swshMatch) return `SWSH${String(swshMatch[1]).padStart(2, "0")}${swshMatch[2] ? `.${swshMatch[2]}` : ""}`;
+  return String(setId || "").toUpperCase();
 }

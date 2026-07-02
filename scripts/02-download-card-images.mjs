@@ -25,6 +25,7 @@ const SCRYDEX_CARD_BACK_HASHES = new Set([
 mkdirSync(TMP_DIR, { recursive: true });
 
 const data = JSON.parse(readFileSync(DATA_PATH, "utf8").slice(DATA_PREFIX.length).replace(/;\s*$/, ""));
+const setsById = new Map(data.setsById || []);
 const cards = [];
 for (const [, list] of data.cardsByDex || []) {
   for (const card of list) {
@@ -111,7 +112,8 @@ async function refreshCard(card, index) {
 
   const selected =
     downloaded.find((item) => item.provider === "Scrydex" && hasTransparentPixels(item.info)) ||
-    downloaded.find((item) => item.provider === "Scrydex" && item.sourcePath);
+    downloaded.find((item) => item.provider === "Scrydex" && item.sourcePath) ||
+    downloaded.find((item) => item.provider === "PokiPair" && item.sourcePath);
 
   if (!selected) {
     const existingInfo = existsSync(output) ? identify(output) : null;
@@ -124,7 +126,7 @@ async function refreshCard(card, index) {
       output,
       hasTransparentPixels: hasTransparentPixels(existingInfo),
       outputSize: existingInfo?.size || "",
-      reason: `No usable Scrydex image. Tried: ${candidates.map((candidate) => candidate.url).join(", ")}`,
+      reason: `No usable image. Tried: ${candidates.map((candidate) => candidate.url).join(", ") || "none"}`,
     };
   }
 
@@ -147,23 +149,33 @@ async function refreshCard(card, index) {
 }
 
 function getCandidates(card) {
-  const urls = new Set();
+  const candidates = [];
+  const scrydexUrls = new Set();
   const sourceUrl = String(card.imageSource?.url || "");
+  const sourceProvider = String(card.imageSource?.provider || "").toLowerCase();
+  const shouldUsePokiPair = isPokiPairUrl(sourceUrl) || sourceProvider === "pokipair" || isSimplifiedChineseCard(card);
+
+  if (shouldUsePokiPair) {
+    if (isPokiPairUrl(sourceUrl)) candidates.push({ provider: "PokiPair", url: sourceUrl });
+    return candidates;
+  }
+
   if (isScrydexUrl(sourceUrl)) {
-    urls.add(toScrydexLargeUrl(sourceUrl));
-    urls.add(getCorrectedScrydexUrl(sourceUrl));
+    scrydexUrls.add(toScrydexLargeUrl(sourceUrl));
+    scrydexUrls.add(getCorrectedScrydexUrl(sourceUrl));
   }
   for (const id of getScrydexIds(card)) {
-    urls.add(`https://images.scrydex.com/pokemon/${id}/large`);
+    scrydexUrls.add(`https://images.scrydex.com/pokemon/${id}/large`);
   }
-  return Array.from(urls).filter(Boolean).map((url) => ({ provider: "Scrydex", url }));
+  candidates.push(...Array.from(scrydexUrls).filter(Boolean).map((url) => ({ provider: "Scrydex", url })));
+  return candidates;
 }
 
 function getScrydexIds(card) {
   const ids = new Set();
   const id = String(card.id || "");
   const setId = String(card.setId || "").toLowerCase();
-  const number = String(card.number || card.printedNumber || "").split("/")[0];
+  const number = String(card.number || getPrintedNumber(card) || "").split("/")[0];
   ids.add(id);
   ids.add(id.toLowerCase());
 
@@ -194,6 +206,39 @@ function getScrydexIds(card) {
 
 function isScrydexUrl(url) {
   return /^https:\/\/images\.scrydex\.com\/pokemon\//i.test(url);
+}
+
+function getPrintedNumber(card) {
+  const number = String(card.number || "");
+  if (card.variant?.number) {
+    const variantNumber = String(card.variant.number || "");
+    const variantTotal = String(card.variant.total || "");
+    return variantTotal ? `${number}${variantNumber}/${variantTotal}` : `${number}${variantNumber}`;
+  }
+  const total = (setsById.get(card.setId) || {}).total;
+  return number && total ? `${number}/${total}` : number;
+}
+
+function getSetDisplayCode(setId) {
+  const swshMatch = String(setId || "").match(/^swsh(\d+)(?:\.(\d+))?$/i);
+  if (swshMatch) return `SWSH${String(swshMatch[1]).padStart(2, "0")}${swshMatch[2] ? `.${swshMatch[2]}` : ""}`;
+  return String(setId || "").toUpperCase();
+}
+
+function isPokiPairUrl(url) {
+  return /^https:\/\/(?:media\.)?pokipair\.com\//i.test(url);
+}
+
+function isSimplifiedChineseCard(card) {
+  const language = String(card.language || "").trim().toUpperCase();
+  if (language === "CN") return true;
+
+  const setMeta = setsById.get(card.setId) || {};
+  const possibleSetCodes = [card.setId, getSetDisplayCode(card.setId), setMeta.ptcgoCode, String(card.id || "").split("-")[0]]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return possibleSetCodes.some((code) => /^(?:CS|CSV|CBB|CSMP|CSVL)\w*$/i.test(code) || /^151C$/i.test(code));
 }
 
 function toScrydexLargeUrl(url) {

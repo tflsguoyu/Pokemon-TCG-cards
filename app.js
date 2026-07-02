@@ -1,4 +1,4 @@
-const CACHE_VERSION = 205;
+const CACHE_VERSION = 246;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -20,9 +20,8 @@ const COLUMN_STORAGE_KEYS = {
 
 const state = {
   species: [],
-  zhNamesByDex: new Map(),
-  ptcgoCodesBySetName: new Map(),
-  setReleaseDatesBySetId: new Map(),
+  speciesCnByDex: new Map(),
+  setsById: new Map(),
   cardsByDex: new Map(),
   query: "",
   generation: "all",
@@ -32,6 +31,9 @@ const state = {
     content: true,
     simple: true,
   },
+  imageDialogCards: [],
+  imageDialogIndex: -1,
+  imageDialogOnSelect: null,
   desktopColumns: 6,
   mobileColumns: 2,
 };
@@ -55,6 +57,8 @@ const els = {
   dialogImage: document.querySelector("#dialogImage"),
   dialogCaption: document.querySelector("#dialogCaption"),
   closeDialogBtn: document.querySelector("#closeDialogBtn"),
+  prevImageBtn: document.querySelector("#prevImageBtn"),
+  nextImageBtn: document.querySelector("#nextImageBtn"),
   candidateDialog: document.querySelector("#candidateDialog"),
   candidateGrid: document.querySelector("#candidateGrid"),
   closeCandidateDialogBtn: document.querySelector("#closeCandidateDialogBtn"),
@@ -118,8 +122,34 @@ function wireControls() {
     els.imageDialog.close();
   });
 
+  els.prevImageBtn.addEventListener("click", () => {
+    showAdjacentHighResImage(-1);
+  });
+
+  els.nextImageBtn.addEventListener("click", () => {
+    showAdjacentHighResImage(1);
+  });
+
   els.imageDialog.addEventListener("click", (event) => {
     if (event.target === els.imageDialog) els.imageDialog.close();
+  });
+
+  els.imageDialog.addEventListener("close", () => {
+    state.imageDialogCards = [];
+    state.imageDialogIndex = -1;
+    state.imageDialogOnSelect = null;
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (!els.imageDialog.open) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      showAdjacentHighResImage(-1);
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      showAdjacentHighResImage(1);
+    }
   });
 
   els.closeCandidateDialogBtn.addEventListener("click", () => {
@@ -190,14 +220,28 @@ function restoreLocalData() {
   if (!data || data.version !== CACHE_VERSION) return false;
 
   state.species = data.species || [];
-  state.zhNamesByDex = new Map((data.zhNames || []).map(([id, name]) => [Number(id), name]));
-  state.ptcgoCodesBySetName = new Map(data.ptcgoCodesBySetName || []);
-  state.setReleaseDatesBySetId = new Map(data.setReleaseDates || []);
-  state.cardsByDex = new Map(
-    (data.cardsByDex || []).map(([id, cards]) => [Number(id), cards])
-  );
+  state.speciesCnByDex = new Map((data.species_cn || []).map(([id, name]) => [Number(id), name]));
+  state.setsById = new Map(data.setsById || []);
+  state.cardsByDex = buildCardsByDexIndex(data.cardsByDex || []);
 
   return state.species.length > 0 && state.cardsByDex.size > 0;
+}
+
+function buildCardsByDexIndex(cardsByDex) {
+  const index = new Map();
+
+  for (const [dexId, cards] of cardsByDex) {
+    const fallbackDexId = Number(dexId);
+    for (const card of cards || []) {
+      for (const targetDexId of getCardDexIds(card, fallbackDexId)) {
+        const bucket = index.get(targetDexId) || [];
+        bucket.push(card);
+        index.set(targetDexId, bucket);
+      }
+    }
+  }
+
+  return index;
 }
 
 function render() {
@@ -245,13 +289,39 @@ function getScopedSpecies() {
 
   return base.filter((mon) => {
     const hasCards = state.cardsByDex.has(mon.id);
-    const zhName = state.zhNamesByDex.get(mon.id) || "";
+    const cnName = state.speciesCnByDex.get(mon.id) || "";
     const inRange = mon.id >= start && mon.id <= end;
-    const tagText = getSpeciesTagText(mon.id);
-    const queryText = `${String(mon.id).padStart(4, "0")} ${mon.name} ${zhName} ${tagText}`.toLowerCase();
+    const queryText = getSpeciesSearchText(mon, cnName);
     const matchesQuery = !state.query || queryText.includes(state.query);
     return inRange && matchesQuery;
   });
+}
+
+function getSpeciesSearchText(mon, cnName) {
+  const cards = state.cardsByDex.get(mon.id) || [];
+  return [
+    String(mon.id).padStart(4, "0"),
+    mon.name,
+    cnName,
+    getSpeciesTagText(mon.id),
+    ...cards.flatMap((card) => [card.cardName, getCardDexSearchText(card, mon.id)]),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function getCardDexIds(card, fallbackDexId) {
+  const ids = Array.isArray(card.dexIds) && card.dexIds.length ? card.dexIds : [fallbackDexId];
+  return Array.from(new Set(ids.map(Number).filter((id) => Number.isFinite(id) && id > 0)));
+}
+
+function getCardDexSearchText(card, fallbackDexId) {
+  return getCardDexIds(card, fallbackDexId)
+    .flatMap((dexId) => {
+      const species = state.species.find((mon) => Number(mon.id) === dexId);
+      return [String(dexId).padStart(4, "0"), species?.name || "", state.speciesCnByDex.get(dexId) || ""];
+    })
+    .join(" ");
 }
 
 function getSpeciesTagText(dexId) {
@@ -293,7 +363,7 @@ function getStoredBackgroundType(card) {
 function renderDexCard(mon) {
   const node = els.template.content.firstElementChild.cloneNode(true);
   const cards = state.cardsByDex.get(mon.id) || [];
-  const zhName = state.zhNamesByDex.get(mon.id) || "";
+  const zhName = state.speciesCnByDex.get(mon.id) || "";
   let activeFormKey = state.shinyOnly ? "shiny" : "base";
 
   node.querySelector(".dex-number").textContent = `#${String(mon.id).padStart(4, "0")}`;
@@ -339,14 +409,19 @@ function renderDexCard(mon) {
 
     node.classList.remove("empty");
     selectedCardId = card.id;
-    image.alt = `${card.name} ${getCardSourceLabel(card)}`;
+    image.alt = `${card.cardName} ${getCardSourceLabel(card)}`;
     applyImageUrls(image, imageUrls, () => {
       node.classList.add("empty");
       image.removeAttribute("src");
       image.alt = "";
       image.onclick = null;
     });
-    image.onclick = () => openHighResImage(card);
+    image.onclick = () =>
+      openHighResImage(card, getActiveCards().filter((item) => getImageUrls(item, "high").length > 0), (nextCard) => {
+        selectedCardId = nextCard.id;
+        select.value = nextCard.id;
+        applyCard(nextCard);
+      });
   };
 
   const updateFormButtons = () => {
@@ -488,28 +563,58 @@ function compareCardsByRelease(a, b) {
 }
 
 function getCardReleaseTime(card) {
-  const releaseDate = card.releaseDate || state.setReleaseDatesBySetId.get(card.setId) || "";
+  const releaseDate = card.releaseDate || getSetMeta(card).releaseDate || "";
   const time = Date.parse(releaseDate);
   return Number.isFinite(time) ? time : 0;
 }
 
 function getSortableCardNumber(card) {
-  const raw = String(card.number || card.printedNumber || "");
+  const raw = String(card.number || getPrintedNumber(card) || "");
   const match = raw.match(/\d+/);
   return match ? Number(match[0]) : -1;
 }
 
-function openHighResImage(card) {
+function openHighResImage(card, cards = [card], onSelect = null) {
+  const imageCards = cards.length ? cards : [card];
+  const selectedIndex = imageCards.findIndex((item) => item.id === card.id);
+  state.imageDialogCards = imageCards;
+  state.imageDialogIndex = selectedIndex >= 0 ? selectedIndex : 0;
+  state.imageDialogOnSelect = onSelect;
+  renderHighResImage(imageCards[state.imageDialogIndex]);
+  els.imageDialog.showModal();
+}
+
+function renderHighResImage(card) {
   const imageUrls = getImageUrls(card, "high");
   applyImageUrls(els.dialogImage, imageUrls);
-  els.dialogImage.alt = `${card.name} ${getCardSourceLabel(card)}`;
-  els.dialogCaption.textContent = `${card.name} · ${getCardSourceLabel(card)}`;
-  els.imageDialog.showModal();
+  els.dialogImage.alt = `${card.cardName} ${getCardSourceLabel(card)}`;
+  els.dialogCaption.textContent = `${card.cardName} · ${getCardSourceLabel(card)}`;
+  updateImageNavButtons();
+}
+
+function showAdjacentHighResImage(direction) {
+  const cards = state.imageDialogCards;
+  if (cards.length < 2) return;
+
+  const nextIndex = (state.imageDialogIndex + direction + cards.length) % cards.length;
+  state.imageDialogIndex = nextIndex;
+  const card = cards[nextIndex];
+  renderHighResImage(card);
+  state.imageDialogOnSelect?.(card);
+}
+
+function updateImageNavButtons() {
+  const canNavigate = state.imageDialogCards.length > 1;
+  els.prevImageBtn.hidden = !canNavigate;
+  els.nextImageBtn.hidden = !canNavigate;
+  els.prevImageBtn.disabled = !canNavigate;
+  els.nextImageBtn.disabled = !canNavigate;
 }
 
 function getCardSourceLabel(card) {
   if (card.source) return card.source;
-  return [card.setName, card.printedNumber ? `#${card.printedNumber}` : "", card.rarity].filter(Boolean).join(" · ");
+  const printedNumber = getPrintedNumber(card);
+  return [getSetName(card), printedNumber ? `#${printedNumber}` : "", card.rarity].filter(Boolean).join(" · ");
 }
 
 function formatCardOptionLabel(card) {
@@ -522,7 +627,8 @@ function formatCardOptionLabel(card) {
 
 function getMenuEraCode(card) {
   const id = String(card.setId || card.id || "").toLowerCase();
-  if (card.eraCode) return card.eraCode;
+  const setMeta = getSetMeta(card);
+  if (card.eraCode || setMeta.eraCode) return card.eraCode || setMeta.eraCode;
   if (id.startsWith("me")) return "ME";
   if (id.startsWith("sv")) return "SV";
   if (id.startsWith("swsh")) return "SWSH";
@@ -534,18 +640,51 @@ function getMenuEraCode(card) {
   if (id.startsWith("hgss")) return "HGSS";
   if (id.startsWith("ex")) return "EX";
   if (id.startsWith("base")) return "BASE";
-  return card.setDisplayCode || "";
+  return getSetDisplayCode(card.setId);
 }
 
 function getMenuSetCode(card) {
-  const ptcgoCode = String(card.ptcgoCode || "").trim();
+  const setMeta = getSetMeta(card);
+  const ptcgoCode = String(setMeta.ptcgoCode || "").trim();
   if (card.label === "Promo" || /^PR-/i.test(ptcgoCode)) return "PROMO";
-  return ptcgoCode || card.setDisplayCode || card.setId || card.setName || "";
+  return ptcgoCode || getSetDisplayCode(card.setId) || card.setId || setMeta.name || "";
 }
 
 function getMenuCardNumber(card) {
-  const number = String(card.number || card.printedNumber || "").split("/")[0];
+  if (card.variant?.number) {
+    return [card.number, card.variant.number].filter(Boolean).map(formatMenuNumberPart).join("-");
+  }
+  const number = String(card.number || getPrintedNumber(card) || "").split("/")[0];
+  return formatMenuNumberPart(number);
+}
+
+function getSetMeta(card) {
+  return state.setsById.get(card.setId) || {};
+}
+
+function getSetName(card) {
+  return getSetMeta(card).name || card.setId || "";
+}
+
+function getPrintedNumber(card) {
+  const number = String(card.number || "");
+  if (card.variant?.number) {
+    const variantNumber = String(card.variant.number || "");
+    const variantTotal = String(card.variant.total || "");
+    return variantTotal ? `${number}${variantNumber}/${variantTotal}` : `${number}${variantNumber}`;
+  }
+  const total = getSetMeta(card).total;
+  return number && total ? `${number}/${total}` : number;
+}
+
+function formatMenuNumberPart(number) {
   return /^\d+$/.test(number) ? String(Number(number)) : number;
+}
+
+function getSetDisplayCode(setId) {
+  const swshMatch = String(setId || "").match(/^swsh(\d+)(?:\.(\d+))?$/i);
+  if (swshMatch) return `SWSH${String(swshMatch[1]).padStart(2, "0")}${swshMatch[2] ? `.${swshMatch[2]}` : ""}`;
+  return String(setId || "").toUpperCase();
 }
 
 function getImageUrls(card, size) {

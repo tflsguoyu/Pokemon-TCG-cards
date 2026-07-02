@@ -1,4 +1,4 @@
-const CACHE_VERSION = 205;
+const CACHE_VERSION = 246;
 
 const FEATURED_TAGS = [
   ["sleeping", "💤"],
@@ -43,6 +43,7 @@ const COLUMN_STORAGE_KEYS = {
 const state = {
   cards: [],
   counts: new Map(),
+  setsById: new Map(),
   selectedTags: new Set(),
   desktopColumns: 7,
   mobileColumns: 3,
@@ -135,8 +136,8 @@ function restoreLocalData() {
 
   const cards = [];
   const cardsById = new Map();
-  const zhNames = new Map((data.zhNames || []).map(([id, name]) => [Number(id), name]));
-  const setReleaseDates = new Map(data.setReleaseDates || []);
+  const speciesCn = new Map((data.species_cn || []).map(([id, name]) => [Number(id), name]));
+  state.setsById = new Map(data.setsById || []);
 
   for (const [dexId, dexCards] of data.cardsByDex || []) {
     for (const card of dexCards || []) {
@@ -147,9 +148,10 @@ function restoreLocalData() {
       const uniqueCard = {
         ...card,
         dexId: Number(dexId),
-        zhName: zhNames.get(Number(dexId)) || "",
+        dexIds: getCardDexIds(card, Number(dexId)),
+        zhName: speciesCn.get(Number(dexId)) || "",
         tags: normalizedTags,
-        releaseTime: getCardReleaseTime(card, setReleaseDates),
+        releaseTime: getCardReleaseTime(card),
       };
       cardsById.set(card.id, uniqueCard);
       cards.push(uniqueCard);
@@ -253,9 +255,9 @@ function renderCards(cards) {
     const title = node.querySelector("h3");
 
     image.src = card.image;
-    image.alt = `${card.name} ${getCardSourceLabel(card)}`;
-    node.querySelector(".tag-card-number").textContent = `#${String(card.dexId).padStart(4, "0")}`;
-    title.textContent = [card.name, card.zhName].filter(Boolean).join(" / ");
+    image.alt = `${card.cardName} ${getCardSourceLabel(card)}`;
+    node.querySelector(".tag-card-number").textContent = formatDexLabel(card);
+    title.textContent = card.cardName;
     node.querySelector(".tag-card-source").textContent = getCardSourceLabel(card);
     imageButton.addEventListener("click", () => openImage(card));
     fragment.appendChild(node);
@@ -264,10 +266,21 @@ function renderCards(cards) {
   els.cardGrid.replaceChildren(fragment);
 }
 
+function getCardDexIds(card, fallbackDexId) {
+  const ids = Array.isArray(card.dexIds) && card.dexIds.length ? card.dexIds : [fallbackDexId];
+  return Array.from(new Set(ids.map(Number).filter((id) => Number.isFinite(id) && id > 0)));
+}
+
+function formatDexLabel(card) {
+  return getCardDexIds(card, card.dexId)
+    .map((dexId) => `#${String(dexId).padStart(4, "0")}`)
+    .join(" / ");
+}
+
 function openImage(card) {
   els.dialogImage.src = card.image;
-  els.dialogImage.alt = `${card.name} ${getCardSourceLabel(card)}`;
-  els.dialogCaption.textContent = `${card.name} · ${getCardSourceLabel(card)}`;
+  els.dialogImage.alt = `${card.cardName} ${getCardSourceLabel(card)}`;
+  els.dialogCaption.textContent = `${card.cardName} · ${getCardSourceLabel(card)}`;
   els.imageDialog.showModal();
 }
 
@@ -277,12 +290,32 @@ function compareCards(a, b) {
   return String(a.id || "").localeCompare(String(b.id || ""), undefined, { numeric: true });
 }
 
-function getCardReleaseTime(card, setReleaseDates) {
-  const releaseDate = card.releaseDate || setReleaseDates.get(card.setId) || "";
+function getCardReleaseTime(card) {
+  const releaseDate = card.releaseDate || getSetMeta(card).releaseDate || "";
   const time = Date.parse(releaseDate);
   return Number.isFinite(time) ? time : 0;
 }
 
 function getCardSourceLabel(card) {
-  return [card.setName, card.printedNumber ? `#${card.printedNumber}` : "", card.rarity].filter(Boolean).join(" · ");
+  const printedNumber = getPrintedNumber(card);
+  return [getSetName(card), printedNumber ? `#${printedNumber}` : "", card.rarity].filter(Boolean).join(" · ");
+}
+
+function getSetMeta(card) {
+  return state.setsById.get(card.setId) || {};
+}
+
+function getSetName(card) {
+  return getSetMeta(card).name || card.setId || "";
+}
+
+function getPrintedNumber(card) {
+  const number = String(card.number || "");
+  if (card.variant?.number) {
+    const variantNumber = String(card.variant.number || "");
+    const variantTotal = String(card.variant.total || "");
+    return variantTotal ? `${number}${variantNumber}/${variantTotal}` : `${number}${variantNumber}`;
+  }
+  const total = getSetMeta(card).total;
+  return number && total ? `${number}/${total}` : number;
 }

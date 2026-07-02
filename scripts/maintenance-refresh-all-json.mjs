@@ -10,6 +10,7 @@ mkdirSync(TMP_DIR, { recursive: true });
 
 const data = readLocalData();
 const speciesByDex = new Map((data.species || []).map((species) => [Number(species.id), species.name]));
+const setsById = new Map(data.setsById || []);
 const cardsById = new Map();
 const cardRefs = [];
 
@@ -89,7 +90,6 @@ async function getTcgdexSet(setId) {
 }
 
 async function refreshSetReleaseDates() {
-  const dates = new Map(data.setReleaseDates || []);
   const setIds = new Set();
   for (const [, cards] of data.cardsByDex || []) {
     for (const card of cards) {
@@ -100,42 +100,45 @@ async function refreshSetReleaseDates() {
   for (const setId of Array.from(setIds).sort()) {
     const set = await getTcgdexSet(setId);
     if (!set?.releaseDate) {
-      summary.setDatesFailed.push({ setId });
+      if (!setsById.get(setId)?.releaseDate) summary.setDatesFailed.push({ setId });
       continue;
     }
-    if (dates.get(setId) !== set.releaseDate) {
-      dates.set(setId, set.releaseDate);
+    const existing = setsById.get(setId) || {};
+    const next = {
+      ...existing,
+      eraCode: existing.eraCode || getEraCode(setId),
+      name: set.name || existing.name || "",
+      total: set.cardCount?.official || existing.total || "",
+      releaseDate: set.releaseDate,
+    };
+    if (JSON.stringify(existing) !== JSON.stringify(next)) {
+      setsById.set(setId, next);
       summary.setDatesUpdated += 1;
     }
   }
 
-  data.setReleaseDates = Array.from(dates.entries()).sort(([a], [b]) => String(a).localeCompare(String(b)));
+  data.setsById = Array.from(setsById.entries()).sort(([a], [b]) => String(a).localeCompare(String(b)));
 }
 
 function refreshLocalCard(card, remote, currentDexId) {
   const dexId = Number(remote?.dexId?.[0] || currentDexId);
   const set = remote?.set || {};
   const setId = String(set.id || card.setId || card.id.split("-")[0] || "");
-  const number = String(remote?.localId || card.number || card.printedNumber || "").split("/")[0];
-  const officialCount = set.cardCount?.official || getPrintedTotal(card.printedNumber);
-  const cardName = remote?.name || card.cardName || card.name || "";
-  const pokemonName = speciesByDex.get(dexId) || card.pokemonName || cardName;
+  const number = card.variant?.number
+    ? String(card.number || "")
+    : String(remote?.localId || card.number || "").split("/")[0];
+  const officialCount = set.cardCount?.official || 0;
+  const cardName = remote?.name || card.cardName || "";
   const { label, rank } = getLabelAndRank(remote || card, card);
 
-  card.name = cardName;
-  card.pokemonName = pokemonName;
+  card.language = card.language || "EN";
   card.cardName = cardName;
   card.image = `./${CARD_DIR}/${card.id}.webp`;
   card.form = classifyForm(cardName);
   card.isShiny = isShinyCard(remote) || Boolean(card.isShiny);
   card.backgroundType = card.backgroundType || "content";
-  card.eraCode = getEraCode(setId);
-  card.setDisplayCode = getSetDisplayCode(setId);
-  card.ptcgoCode = getPtcgoCode(remote, card, data);
   card.setId = setId;
-  card.setName = set.name || card.setName || "";
   card.number = number;
-  card.printedNumber = officialCount ? `${number}/${officialCount}` : number;
   card.rarity = remote?.rarity || card.rarity || "None";
   card.label = label;
   card.rank = rank;
@@ -143,30 +146,24 @@ function refreshLocalCard(card, remote, currentDexId) {
     provider: "Scrydex",
     url: getScrydexImageSource(setId, number),
   };
+
+  upsertSetMeta(setId, {
+    eraCode: getEraCode(setId),
+    ptcgoCode: getPtcgoCode(remote, card),
+    name: set.name || getSetMeta(card).name || "",
+    total: officialCount || getSetMeta(card).total || "",
+  });
 }
 
-function getPrintedTotal(printedNumber) {
-  const match = String(printedNumber || "").match(/\/(\d+)$/);
-  return match ? Number(match[1]) : 0;
-}
-
-function getPtcgoCode(remote, card, data) {
+function getPtcgoCode(remote, card) {
   const direct = remote?.set?.tcgOnline || remote?.set?.abbreviation?.official || "";
   if (direct) return direct;
 
   const setId = String(remote?.set?.id || card.setId || "");
-  for (const [, cards] of data.cardsByDex || []) {
-    const existing = cards.find((item) => item.setId === setId && item.ptcgoCode);
-    if (existing) return existing.ptcgoCode;
-  }
+  const existingSet = setsById.get(setId);
+  if (existingSet?.ptcgoCode) return existingSet.ptcgoCode;
 
-  const setNameKey = normalizeSetName(remote?.set?.name || card.setName || "");
-  const fromSetName = new Map(data.ptcgoCodesBySetName || []).get(setNameKey);
-  return fromSetName || "";
-}
-
-function normalizeSetName(name) {
-  return String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return "";
 }
 
 function getScrydexImageSource(setId, number) {
@@ -243,8 +240,41 @@ function getLabelAndRank(source, existing) {
   if (rarity === "shiny ultra rare") return { label: "Shiny", rank: 5 };
   if (rarity === "radiant rare") return { label: "Rare", rank: 4 };
   if (rarity === "mega attack rare") return { label: "MAR", rank: 1 };
-  if (existing?.label === "Promo" || String(existing?.ptcgoCode || "").startsWith("PR-")) return { label: "Promo", rank: 4 };
+  if (existing?.label === "Promo" || String(getPtcgoCodeFromExisting(existing) || "").startsWith("PR-")) return { label: "Promo", rank: 4 };
   return { label: "Rare", rank: 4 };
+}
+
+function upsertSetMeta(setId, updates) {
+  if (!setId) return;
+  const existing = setsById.get(setId) || {};
+  const next = Object.fromEntries(
+    Object.entries({ ...existing, ...updates }).filter(([, value]) => value !== "" && value !== undefined && value !== null)
+  );
+  setsById.set(setId, next);
+  data.setsById = Array.from(setsById.entries()).sort(([a], [b]) => String(a).localeCompare(String(b)));
+}
+
+function getSetMeta(card) {
+  return setsById.get(card?.setId) || {};
+}
+
+function getSetName(card) {
+  return getSetMeta(card).name || "";
+}
+
+function getPrintedNumber(card) {
+  const number = String(card?.number || "");
+  if (card?.variant?.number) {
+    const variantNumber = String(card.variant.number || "");
+    const variantTotal = String(card.variant.total || "");
+    return variantTotal ? `${number}${variantNumber}/${variantTotal}` : `${number}${variantNumber}`;
+  }
+  const total = getSetMeta(card).total;
+  return number && total ? `${number}/${total}` : number;
+}
+
+function getPtcgoCodeFromExisting(card) {
+  return card?.ptcgoCode || getSetMeta(card).ptcgoCode || "";
 }
 
 function getEraCode(setId) {
@@ -257,12 +287,6 @@ function getEraCode(setId) {
   if (String(setId).startsWith("xy")) return "XY";
   if (String(setId).startsWith("bw")) return "BW";
   return "";
-}
-
-function getSetDisplayCode(setId) {
-  const swshMatch = String(setId || "").match(/^swsh(\d+)(?:\.(\d+))?$/i);
-  if (swshMatch) return `SWSH${String(swshMatch[1]).padStart(2, "0")}${swshMatch[2] ? `.${swshMatch[2]}` : ""}`;
-  return String(setId || "").toUpperCase();
 }
 
 function writeSummary() {

@@ -28,7 +28,7 @@ sw.js                              Service Worker
 
 ```text
 scripts/01-add-card-json.mjs                  主流程第 1 步：添加指定 TCGdex card id 的 JSON 信息，不下载图片
-scripts/02-download-card-images.mjs           主流程第 2 步：按 JSON 里的 Scrydex 图源下载图片并转成本地 WebP
+scripts/02-download-card-images.mjs           主流程第 2 步：按 JSON 里的图片图源下载图片并转成本地 WebP
 scripts/maintenance-refresh-all-json.mjs      维护：刷新全量本地卡牌 JSON 信息，不下载图片
 scripts/maintenance-apply-review-results.mjs  维护：应用审核页保存的结果
 scripts/tool-find-card.mjs                    工具：本地查卡
@@ -48,8 +48,8 @@ node scripts/01-add-card-json.mjs swsh9-TG01 swsh12.5-GG01 sv10.5b-087
 这个脚本只负责数据：
 
 - 主要从 TCGdex API 获取卡牌 metadata
-- 写入 `name`、`pokemonName`、`cardName`
-- 写入 Scrydex 图片来源
+- 写入 `cardName`
+- 写入图片来源。普通英文实体卡默认使用 Scrydex；简体中文独占卡使用 PokiPair
 - 不下载图片
 
 第二步：按 JSON 里的图源下载图片。
@@ -76,12 +76,13 @@ node scripts/02-download-card-images.mjs
 
 1. 本地卡牌 id 使用 TCGdex card id，例如 `me02.5-270`、`sv03.5-166`。
 2. 卡牌 metadata 主要来自 TCGdex API。
-3. 图片来源必须是 Scrydex。
-4. 图片只拿 Scrydex 的 `/large`。
-5. 不从其他网站兜底下载图片。
-6. 禁止收录 Pokemon TCG Pocket。`A1/A2...`、`B1/B1a/B2...` 这类 Pocket 系列不属于实体卡。
+3. 普通英文实体卡图片来源必须是 Scrydex。
+4. 简体中文独占卡图片来源必须是 PokiPair。
+5. Scrydex 图片只拿 `/large`；PokiPair 图片只拿记录的原始 URL。
+6. 不从其他网站兜底下载图片。
+7. 禁止收录 Pokemon TCG Pocket。`A1/A2...`、`B1/B1a/B2...` 这类 Pocket 系列不属于实体卡。
 
-TCGdex 查不到 metadata 的少量卡会使用已有本地 JSON 信息兜底，但图片规则仍然只用 Scrydex。
+TCGdex 查不到 metadata 的少量卡会使用已有本地 JSON 信息兜底，但图片规则仍然只允许 Scrydex 或 PokiPair。
 
 ## 图片规则
 
@@ -113,12 +114,23 @@ imageSource: {
 
 ```text
 Scrydex
+PokiPair
+```
+
+简体中文独占卡使用 PokiPair 图源：
+
+```js
+imageSource: {
+  provider: "PokiPair",
+  url: "https://media.pokipair.com/..."
+}
 ```
 
 `02-download-card-images.mjs` 会：
 
 - 只读取 `imageSource.url`
-- 只尝试 Scrydex URL
+- 只尝试允许来源的 URL
+- 简体中文卡只允许 PokiPair URL，拿不到就汇报缺图，不自动尝试其他网站
 - 自动尝试已知 Scrydex 路径修正规则
 - 跳过 Scrydex 卡背占位图
 - 下载后转成高度 825 的 WebP
@@ -177,31 +189,42 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 - `version`：本地数据版本，用来刷新浏览器缓存
 - `generatedAt`：这份数据最初生成的时间
 - `species`：全国图鉴 1-1025 的英文名
-- `zhNames`：全国图鉴编号对应中文名
-- `ptcgoCodesBySetName`：实体大系列名和 PTCGO code 的对应关系
-- `setReleaseDates`：系列发行日，用来排序下拉菜单里的候选卡
+- `species_cn`：全国图鉴编号对应中文名
+- `setsById`：按 `setId` 存放系列级信息，包括英文系列名、PTCGO code、总张数和发行日
 - `cardsByDex`：按全国图鉴编号分组的卡片列表
+
+系列信息集中写在 `setsById`：
+
+```js
+[
+  [
+    "swsh9",
+    {
+      eraCode: "SWSH",
+      ptcgoCode: "BRS",
+      name: "Brilliant Stars",
+      total: "TG30",
+      releaseDate: "2022-02-25"
+    }
+  ]
+]
+```
 
 每张卡保留这些字段：
 
 ```js
 {
   id: "swsh9-TG01",
-  name: "Flareon",
-  pokemonName: "Flareon",
+  language: "EN",
   cardName: "Flareon",
   image: "./assets/cards/swsh9-TG01.webp",
   form: { key: "base", label: "Base", rank: 0 },
   isShiny: false,
   backgroundType: "content",
   tags: ["forest", "trees", "flowers", "solo", "peaceful", "green"],
-  eraCode: "",
-  setDisplayCode: "",
-  ptcgoCode: "BRS",
   setId: "swsh9",
-  setName: "Brilliant Stars",
   number: "TG01",
-  printedNumber: "TG01/TG30",
+  variant: { number: "09", total: "09" },
   rarity: "Trainer Gallery Rare Holo",
   label: "TG",
   releaseDate: "2022-02-25",
@@ -213,11 +236,42 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 }
 ```
 
-`releaseDate` 是可选字段，只在有精确到日的单卡发行日时才写。默认排序使用 `setReleaseDates` 里的系列发行日；不要写 `YYYY-MM-01` 这类月度占位日期。
+`dexIds` 和 `primaryDexId` 只在一张卡对应多个全国图鉴编号时使用，比如 Tag Team。卡片实体只保留一份；页面加载时会用 `dexIds` 动态挂到多个宝可梦下面。
+
+```js
+{
+  id: "sm9-162",
+  cardName: "Pikachu & Zekrom GX",
+  dexIds: [25, 644],
+  primaryDexId: 25
+}
+```
+
+`releaseDate` 是可选的单卡发行日，只在有精确到日且不同于系列发行日时才写。默认排序使用 `setsById` 里的系列发行日；不要写 `YYYY-MM-01` 这类月度占位日期。
+
+`printedNumber` 不再逐卡保存；显示时由 `number` 和 `setsById[setId].total` 组合出来。没有 `total` 的系列只显示 `number`。
+
+部分简中卡面会用类似 `0709/09` 的变种编号。这里 `07` 是主编号，`09/09` 是这张主卡的第 9 个变种 / 共 9 个变种。这类卡写成：
+
+```js
+{
+  id: "cbb1c-07-09",
+  setId: "cbb1c",
+  number: "07",
+  variant: { number: "09", total: "09" }
+}
+```
+
+显示时会派生成 `0709/09`；菜单和查找 code 会显示成 `7-9`。
 
 旧字段不要再写：
 
 ```text
+eraCode
+setDisplayCode
+ptcgoCode
+setName
+printedNumber
 fallbackImage
 highImage
 highFallbackImage

@@ -620,6 +620,38 @@ h2 {
   text-align: center;
 }
 
+.image-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 42px;
+  height: 54px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(23, 32, 38, 0.76);
+  color: white;
+  font-size: 42px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.image-nav:hover {
+  background: rgba(23, 32, 38, 0.92);
+}
+
+.image-nav:disabled,
+.image-nav[hidden] {
+  display: none;
+}
+
+.image-nav-prev {
+  left: 10px;
+}
+
+.image-nav-next {
+  right: 10px;
+}
+
 .close-dialog {
   position: absolute;
   top: 10px;
