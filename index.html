@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#246b9f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="PTCG Dex" />
+    <title>PTCG 全国图鉴 / National Dex</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="./styles.css?v=246" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div>
+          <p class="eyebrow">Pokemon TCG</p>
+          <h1>全国图鉴 / National Dex</h1>
+        </div>
+        <nav class="page-links" aria-label="页面 / Pages">
+          <a href="./tags.html">
+            <span>标签</span>
+            <span>Tags</span>
+          </a>
+          <a href="./review.html">
+            <span>审核</span>
+            <span>Review</span>
+          </a>
+        </nav>
+      </div>
+      <section class="controls" aria-label="筛选 / Filters">
+        <label class="search">
+          <span class="control-label">
+            <span>搜索</span>
+            <span>Search</span>
+          </span>
+          <input id="searchInput" type="search" placeholder="编号或名字 / No. or name" autocomplete="off" />
+        </label>
+        <label class="select-wrap">
+          <span class="control-label">
+            <span>世代</span>
+            <span>Gen</span>
+          </span>
+          <select id="generationSelect">
+            <option value="all">全部 / All</option>
+            <option value="1">Gen 1</option>
+            <option value="2">Gen 2</option>
+            <option value="3">Gen 3</option>
+            <option value="4">Gen 4</option>
+            <option value="5">Gen 5</option>
+            <option value="6">Gen 6</option>
+            <option value="7">Gen 7</option>
+            <option value="8">Gen 8</option>
+            <option value="9">Gen 9</option>
+          </select>
+        </label>
+        <label class="status-shiny">
+          <input id="shinyOnlyInput" type="checkbox" />
+          <span class="tool-label">
+            <span>闪光</span>
+            <span>Shiny</span>
+          </span>
+        </label>
+      </section>
+      <div class="view-tools">
+        <div class="background-filters" aria-label="背景筛选 / Background filters">
+          <label class="background-filter">
+            <input id="contentBackgroundInput" type="checkbox" checked />
+            <span class="tool-label">
+              <span>插画卡</span>
+              <span>Illus. Art</span>
+            </span>
+          </label>
+          <label class="background-filter">
+            <input id="simpleBackgroundInput" type="checkbox" checked />
+            <span class="tool-label">
+              <span>全图卡</span>
+              <span>Full Art</span>
+            </span>
+          </label>
+        </div>
+        <div class="status" id="status" aria-label="显示范围 / View mode">
+          <button id="withImagesViewBtn" class="status-filter" type="button" aria-pressed="false">
+            <span class="tool-label">
+              <span>有图 <span id="withImagesCount" class="inline-count">0</span></span>
+              <span>With images</span>
+            </span>
+          </button>
+          <button id="allViewBtn" class="status-filter active" type="button" aria-pressed="true">
+            <span class="tool-label">
+              <span>全部 <span id="totalSummaryCount" class="inline-count">0</span></span>
+              <span>Total</span>
+            </span>
+          </button>
+        </div>
+        <label class="density-control">
+          <span class="tool-label">
+            <span>每行 <span id="columnsCount" class="inline-count">6</span></span>
+            <span>Columns</span>
+          </span>
+          <input id="columnsInput" type="range" min="6" max="55" value="6" />
+        </label>
+      </div>
+    </header>
+
+    <main>
+      <section id="dexGrid" class="dex-grid" aria-label="图鉴列表 / Dex list"></section>
+    </main>
+
+    <template id="dexCardTemplate">
+      <article class="dex-card">
+        <div class="card-head">
+          <div>
+            <div class="dex-number"></div>
+            <h2></h2>
+          </div>
+          <div class="form-buttons" aria-label="形态 / Forms"></div>
+        </div>
+        <div class="image-stage">
+          <img alt="" loading="lazy" />
+          <div class="empty-state" aria-label="暂无卡图 / No image"></div>
+        </div>
+        <div class="variant-picker">
+          <select></select>
+          <button class="card-gallery-button" type="button" aria-label="候选图 / Candidate images" title="候选图 / Candidate images">
+            <span aria-hidden="true"></span>
+          </button>
+        </div>
+      </article>
+    </template>
+
+    <dialog id="candidateDialog" class="candidate-dialog">
+      <button id="closeCandidateDialogBtn" class="close-dialog" type="button" aria-label="关闭 / Close">×</button>
+      <div id="candidateGrid" class="candidate-grid" aria-label="候选图 / Candidate images"></div>
+    </dialog>
+
+    <dialog id="imageDialog" class="image-dialog">
+      <button id="closeDialogBtn" class="close-dialog" type="button" aria-label="关闭 / Close">×</button>
+      <button id="prevImageBtn" class="image-nav image-nav-prev" type="button" aria-label="上一张 / Previous image">‹</button>
+      <figure>
+        <img id="dialogImage" alt="" />
+        <figcaption id="dialogCaption"></figcaption>
+      </figure>
+      <button id="nextImageBtn" class="image-nav image-nav-next" type="button" aria-label="下一张 / Next image">›</button>
+    </dialog>
+
+    <script src="./asset-config.js?v=247"></script>
+    <script src="./form-index.js?v=246"></script>
+    <script src="./local-data.js?v=246"></script>
+    <script src="./app.js?v=247"></script>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+tmp/
+.DS_Store
+ptcg-*-review-*.json
+ptcg-review-*.json
+assets/cards/*.webp

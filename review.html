@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>卡片分类审核</title>
+    <link rel="stylesheet" href="./review.css?v=246" />
+  </head>
+  <body>
+    <header class="review-topbar">
+      <div class="review-title">
+        <p>Pokemon TCG</p>
+        <h1>卡片分类审核</h1>
+      </div>
+      <div class="review-controls">
+        <label class="review-search">
+          <span class="stack-label">
+            <span>搜索</span>
+            <span>搜索</span>
+          </span>
+          <input id="searchInput" type="search" placeholder="编号、名字、系列、卡号" autocomplete="off" />
+        </label>
+        <label class="review-filter">
+          <span class="stack-label">
+            <span>分类</span>
+            <span>分类</span>
+          </span>
+          <select id="typeSelect">
+            <option value="all">全部</option>
+            <option value="content">内容</option>
+            <option value="simple">简单</option>
+            <option value="other">其他</option>
+          </select>
+        </label>
+        <label class="review-filter">
+          <span class="stack-label">
+            <span>显示</span>
+            <span>显示</span>
+          </span>
+          <select id="viewSelect">
+            <option value="all">全部</option>
+            <option value="changed">已改</option>
+            <option value="deleted">删除</option>
+          </select>
+        </label>
+        <button id="saveBtn" class="primary-action" type="button">保存结果</button>
+      </div>
+      <div class="review-summary" id="summary"></div>
+      <nav id="eraNav" class="era-nav" aria-label="时代导航"></nav>
+      <nav id="seriesNav" class="series-nav" aria-label="系列导航"></nav>
+    </header>
+
+    <main>
+      <section id="reviewGrid" class="review-grid" aria-label="卡片审核"></section>
+    </main>
+
+    <dialog id="imageDialog" class="image-dialog">
+      <button id="closeDialogBtn" class="close-dialog" type="button" aria-label="关闭">×</button>
+      <figure>
+        <img id="dialogImage" alt="" />
+        <figcaption id="dialogCaption"></figcaption>
+      </figure>
+    </dialog>
+
+    <template id="reviewCardTemplate">
+      <article class="review-card">
+        <div class="card-meta">
+          <div>
+            <div class="dex-number"></div>
+            <h2></h2>
+            <p class="card-code"></p>
+          </div>
+          <span class="status-pill"></span>
+        </div>
+        <button class="image-button" type="button">
+          <img alt="" loading="lazy" />
+          <span>无图</span>
+        </button>
+        <div class="action-row">
+          <button class="choice choice-content" type="button" data-action="content">内容</button>
+          <button class="choice choice-simple" type="button" data-action="simple">简单</button>
+          <button class="choice choice-other" type="button" data-action="other">其他</button>
+          <button class="choice choice-delete" type="button" data-action="delete">删除</button>
+        </div>
+        <div class="shiny-row" aria-label="Shiny 标记">
+          <button class="shiny-choice shiny-yes" type="button" data-shiny="true">Shiny</button>
+          <button class="shiny-choice shiny-no" type="button" data-shiny="false">非 Shiny</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="./asset-config.js?v=247"></script>
+    <script src="./local-data.js?v=246"></script>
+    <script src="./review.js?v=247"></script>
+  </body>
+</html>
