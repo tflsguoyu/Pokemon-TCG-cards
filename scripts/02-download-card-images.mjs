@@ -113,6 +113,7 @@ async function refreshCard(card, index) {
   const selected =
     downloaded.find((item) => item.provider === "Scrydex" && hasTransparentPixels(item.info)) ||
     downloaded.find((item) => item.provider === "Scrydex" && item.sourcePath) ||
+    downloaded.find((item) => item.provider === "Pokemon.cn" && item.sourcePath) ||
     downloaded.find((item) => item.provider === "PokiPair" && item.sourcePath);
 
   if (!selected) {
@@ -153,9 +154,12 @@ function getCandidates(card) {
   const scrydexUrls = new Set();
   const sourceUrl = String(card.imageSource?.url || "");
   const sourceProvider = String(card.imageSource?.provider || "").toLowerCase();
-  const shouldUsePokiPair = isPokiPairUrl(sourceUrl) || sourceProvider === "pokipair" || isSimplifiedChineseCard(card);
+  const isPokemonCnSource = isPokemonCnUrl(sourceUrl) || sourceProvider === "pokemon.cn";
+  const isPokiPairSource = isPokiPairUrl(sourceUrl) || sourceProvider === "pokipair";
+  const shouldUseChineseSource = isPokemonCnSource || isPokiPairSource || isSimplifiedChineseCard(card);
 
-  if (shouldUsePokiPair) {
+  if (shouldUseChineseSource) {
+    if (isPokemonCnUrl(sourceUrl)) candidates.push({ provider: "Pokemon.cn", url: sourceUrl });
     if (isPokiPairUrl(sourceUrl)) candidates.push({ provider: "PokiPair", url: sourceUrl });
     return candidates;
   }
@@ -227,6 +231,10 @@ function getSetDisplayCode(setId) {
 
 function isPokiPairUrl(url) {
   return /^https:\/\/(?:media\.)?pokipair\.com\//i.test(url);
+}
+
+function isPokemonCnUrl(url) {
+  return /^https:\/\/(?:image\.pokemon\.com\.cn|special\.pokemon\.cn)\//i.test(url);
 }
 
 function isSimplifiedChineseCard(card) {

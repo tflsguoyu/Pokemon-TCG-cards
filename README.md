@@ -49,8 +49,10 @@ node scripts/01-add-card-json.mjs swsh9-TG01 swsh12.5-GG01 sv10.5b-087
 
 - 主要从 TCGdex API 获取卡牌 metadata
 - 写入 `cardName`
-- 写入图片来源。普通英文实体卡默认使用 Scrydex；简体中文独占卡使用 PokiPair
+- 写入英文实体卡的 Scrydex 图片来源
 - 不下载图片
+
+简体中文独占卡目前以手动整理为主，图片来源优先使用 Pokemon.cn。
 
 第二步：按 JSON 里的图源下载图片。
 
@@ -74,15 +76,16 @@ node scripts/02-download-card-images.mjs
 
 核心原则：
 
-1. 本地卡牌 id 使用 TCGdex card id，例如 `me02.5-270`、`sv03.5-166`。
-2. 卡牌 metadata 主要来自 TCGdex API。
-3. 普通英文实体卡图片来源必须是 Scrydex。
-4. 简体中文独占卡图片来源必须是 PokiPair。
-5. Scrydex 图片只拿 `/large`；PokiPair 图片只拿记录的原始 URL。
-6. 不从其他网站兜底下载图片。
-7. 禁止收录 Pokemon TCG Pocket。`A1/A2...`、`B1/B1a/B2...` 这类 Pocket 系列不属于实体卡。
+1. 英文卡本地 id 使用 TCGdex card id，例如 `me02.5-270`、`sv03.5-166`。
+2. 简体中文独占卡使用自定义小写 id，例如 `cbb1c-07-09`、`151c-170`。
+3. 英文卡 metadata 主要来自 TCGdex API；简体中文独占卡以本地整理为准。
+4. 英文实体卡图片来源必须是 Scrydex。
+5. 简体中文独占卡图片来源优先使用 Pokemon.cn；少量尚未替换的旧图可暂时保留 PokiPair。
+6. Scrydex 图片只拿 `/large`；Pokemon.cn 和 PokiPair 图片只拿记录的原始 URL。
+7. 不从其他网站兜底下载图片。
+8. 禁止收录 Pokemon TCG Pocket。`A1/A2...`、`B1/B1a/B2...` 这类 Pocket 系列不属于实体卡。
 
-TCGdex 查不到 metadata 的少量卡会使用已有本地 JSON 信息兜底，但图片规则仍然只允许 Scrydex 或 PokiPair。
+TCGdex 查不到 metadata 的少量卡会使用已有本地 JSON 信息兜底，但图片规则仍然只允许 Scrydex、Pokemon.cn 或 PokiPair。
 
 ## 图片规则
 
@@ -114,15 +117,16 @@ imageSource: {
 
 ```text
 Scrydex
+Pokemon.cn
 PokiPair
 ```
 
-简体中文独占卡使用 PokiPair 图源：
+简体中文独占卡优先使用 Pokemon.cn 图源：
 
 ```js
 imageSource: {
-  provider: "PokiPair",
-  url: "https://media.pokipair.com/..."
+  provider: "Pokemon.cn",
+  url: "https://image.pokemon.com.cn/..."
 }
 ```
 
@@ -130,7 +134,7 @@ imageSource: {
 
 - 只读取 `imageSource.url`
 - 只尝试允许来源的 URL
-- 简体中文卡只允许 PokiPair URL，拿不到就汇报缺图，不自动尝试其他网站
+- 简体中文卡只允许 Pokemon.cn 或 PokiPair URL，拿不到就汇报缺图，不自动尝试其他网站
 - 自动尝试已知 Scrydex 路径修正规则
 - 跳过 Scrydex 卡背占位图
 - 下载后转成高度 825 的 WebP
@@ -187,9 +191,9 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 顶层数据：
 
 - `version`：本地数据版本，用来刷新浏览器缓存
-- `generatedAt`：这份数据最初生成的时间
+- `generatedAt`：最近一次写入 `local-data.js` 的时间
 - `species`：全国图鉴 1-1025 的英文名
-- `species_cn`：全国图鉴编号对应中文名
+- `species_cn`：全国图鉴编号对应中文名；`9999` 用作简中独占训练家 / 物品卡的临时分组
 - `setsById`：按 `setId` 存放系列级信息，包括英文系列名、PTCGO code、总张数和发行日
 - `cardsByDex`：按全国图鉴编号分组的卡片列表
 
@@ -203,7 +207,7 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
       eraCode: "SWSH",
       ptcgoCode: "BRS",
       name: "Brilliant Stars",
-      total: "TG30",
+      total: "172",
       releaseDate: "2022-02-25"
     }
   ]
@@ -224,10 +228,8 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
   tags: ["forest", "trees", "flowers", "solo", "peaceful", "green"],
   setId: "swsh9",
   number: "TG01",
-  variant: { number: "09", total: "09" },
   rarity: "Trainer Gallery Rare Holo",
   label: "TG",
-  releaseDate: "2022-02-25",
   imageSource: {
     provider: "Scrydex",
     url: "https://images.scrydex.com/pokemon/swsh9tg-TG01/large"
@@ -264,13 +266,13 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 
 显示时会派生成 `0709/09`；菜单和查找 code 会显示成 `7-9`。
 
-旧字段不要再写：
+这些字段不要写在单张卡里；系列级信息统一放在 `setsById`，显示字段运行时派生：
 
 ```text
 eraCode
-setDisplayCode
 ptcgoCode
 setName
+setDisplayCode
 printedNumber
 fallbackImage
 highImage

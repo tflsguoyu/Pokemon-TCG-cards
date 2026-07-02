@@ -50,7 +50,7 @@ for (const id of ids) {
       continue;
     }
 
-    upsertSetMeta(data, card.set);
+    upsertSetMeta(card.set);
     addCard(data, Number(card.dexId[0]), buildLocalCard(card, data));
     summary.added += 1;
     summary.imageSourcesPrepared += 1;
@@ -107,21 +107,14 @@ function buildLocalCard(card, data) {
   };
 }
 
-function getPtcgoCode(card, data) {
+function getPtcgoCode(card) {
   const direct = card.set?.tcgOnline || card.set?.abbreviation?.official || "";
   if (direct) return direct;
 
   const setId = String(card.set?.id || "");
   const existingSet = setsById.get(setId);
   if (existingSet?.ptcgoCode) return existingSet.ptcgoCode;
-
-  const setNameKey = normalizeSetName(card.set?.name || "");
-  const fromSetName = new Map(data.ptcgoCodesBySetName || []).get(setNameKey);
-  return fromSetName || "";
-}
-
-function normalizeSetName(name) {
-  return String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return "";
 }
 
 function addCard(data, dexId, card) {
@@ -135,14 +128,14 @@ function addCard(data, dexId, card) {
   data.cardsByDex.push([dexId, [card]]);
 }
 
-function upsertSetMeta(data, set) {
+function upsertSetMeta(set) {
   if (!set?.id) return;
   const remoteSet = set.releaseDate ? set : getTcgdexSet(set.id);
   const existing = setsById.get(set.id) || {};
   const next = {
     ...existing,
     eraCode: existing.eraCode || getEraCode(set.id),
-    ptcgoCode: getPtcgoCode({ set }, data),
+    ptcgoCode: getPtcgoCode({ set }),
     name: set.name || existing.name || "",
     total: set.cardCount?.official || remoteSet.cardCount?.official || existing.total || "",
     releaseDate: set.releaseDate || remoteSet.releaseDate || existing.releaseDate || "",
