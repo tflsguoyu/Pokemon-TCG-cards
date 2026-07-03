@@ -72,7 +72,7 @@ button {
 
 h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -411,13 +411,13 @@ h3 {
 
   h1 {
     overflow: hidden;
-    font-size: 20px;
+    font-size: 18px;
     text-overflow: ellipsis;
   }
 
   .page-links {
     flex: 0 0 auto;
-    flex-direction: column;
+    flex-direction: row;
     gap: 3px;
     width: auto;
   }

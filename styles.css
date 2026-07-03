@@ -97,7 +97,7 @@ body {
 
 h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -733,7 +733,7 @@ h2 {
   }
 
   h1 {
-    font-size: 20px;
+    font-size: 18px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
