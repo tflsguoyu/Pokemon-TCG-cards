@@ -1,39 +1,135 @@
-const CACHE_VERSION = 272;
+const CACHE_VERSION = 285;
 
 const FEATURED_TAGS = [
-  ["sleeping", "💤"],
-  ["forest", "🌲"],
-  ["underwater", "🌊"],
-  ["bird", "🪶"],
-  ["pink", "●"],
-  ["simple", "□"],
-  ["partner", "♡"],
-  ["flowers", "✿"],
-  ["night", "☾"],
-  ["fire", "◆"],
-  ["city", "▦"],
-  ["food", "◉"],
-  ["snow", "✧"],
-  ["ocean", "≈"],
-  ["neon", "✦"],
-  ["cute", "☺"],
-  ["battle", "⚡"],
-  ["sky", "☁"],
-  ["dragon", "◇"],
-  ["music", "♪"],
-  ["desert", "△"],
-  ["cozy", "⌂"],
-  ["ghost", "◌"],
-  ["water", "≈"],
-  ["group", "●●"],
-  ["moon", "☽"],
-  ["garden", "✽"],
-  ["space", "✶"],
-  ["crystal", "◇"],
-  ["future", "⌁"],
-  ["ancient", "◫"],
-  ["mask", "◈"]
+  "sleeping",
+  "forest",
+  "underwater",
+  "bird",
+  "pink",
+  "simple",
+  "partner",
+  "flowers",
+  "night",
+  "fire",
+  "city",
+  "food",
+  "snow",
+  "ocean",
+  "neon",
+  "cute",
+  "battle",
+  "sky",
+  "dragon",
+  "music",
+  "desert",
+  "cozy",
+  "ghost",
+  "water",
+  "group",
+  "moon",
+  "garden",
+  "space",
+  "crystal",
+  "future",
+  "ancient",
+  "mask",
 ];
+
+const TAG_CATEGORIES = [
+  {
+    key: "all",
+    zh: "全部",
+    en: "All",
+    tags: FEATURED_TAGS,
+  },
+  {
+    key: "scene",
+    zh: "场景",
+    en: "Scene",
+    tags: ["forest", "underwater", "city", "snow", "ocean", "sky", "desert", "garden", "space", "outdoors", "indoors"],
+  },
+  {
+    key: "mood",
+    zh: "氛围",
+    en: "Mood",
+    tags: ["night", "moon", "cozy", "calm", "mysterious", "future", "ancient", "dark", "bright", "neon"],
+  },
+  {
+    key: "color",
+    zh: "颜色",
+    en: "Color",
+    tags: ["pink", "blue", "green", "orange", "yellow", "purple", "crystal"],
+  },
+  {
+    key: "subject",
+    zh: "主体",
+    en: "Subject",
+    tags: ["bird", "dragon", "ghost", "trainer", "partner", "group", "solo"],
+  },
+  {
+    key: "action",
+    zh: "动作",
+    en: "Action",
+    tags: ["sleeping", "battle", "dynamic pose", "playful", "cute"],
+  },
+  {
+    key: "element",
+    zh: "元素",
+    en: "Element",
+    tags: ["flowers", "fire", "food", "music", "mask", "water", "nature", "simple"],
+  },
+];
+
+const TAG_LABELS = {
+  sleeping: "睡眠",
+  forest: "森林",
+  underwater: "水下",
+  bird: "鸟类",
+  pink: "粉色",
+  simple: "简洁",
+  partner: "伙伴",
+  flowers: "花朵",
+  night: "夜晚",
+  fire: "火焰",
+  city: "城市",
+  food: "食物",
+  snow: "雪景",
+  ocean: "海洋",
+  neon: "霓虹",
+  cute: "可爱",
+  battle: "战斗",
+  sky: "天空",
+  dragon: "龙",
+  music: "音乐",
+  desert: "沙漠",
+  cozy: "温馨",
+  ghost: "幽灵",
+  water: "水",
+  group: "群像",
+  moon: "月亮",
+  garden: "庭园",
+  space: "宇宙",
+  crystal: "水晶",
+  future: "未来",
+  ancient: "古代",
+  mask: "面具",
+  solo: "单体",
+  blue: "蓝色",
+  green: "绿色",
+  "dynamic pose": "动态",
+  trainer: "训练家",
+  bright: "明亮",
+  calm: "平静",
+  orange: "橙色",
+  nature: "自然",
+  yellow: "黄色",
+  dark: "深色",
+  mysterious: "神秘",
+  outdoors: "户外",
+  playful: "玩耍",
+  indoors: "室内",
+  purple: "紫色",
+};
 
 const COLUMN_STORAGE_KEYS = {
   desktop: "ptcg.tags.desktopColumns",
@@ -45,17 +141,17 @@ const state = {
   counts: new Map(),
   setsById: new Map(),
   selectedTags: new Set(),
+  activeTagCategory: "all",
   desktopColumns: 7,
   mobileColumns: 3,
 };
 
 const els = {
+  tagCategoryRail: document.querySelector("#tagCategoryRail"),
   tagRail: document.querySelector("#tagRail"),
   clearTagsBtn: document.querySelector("#clearTagsBtn"),
   cardGrid: document.querySelector("#cardGrid"),
-  selectedTags: document.querySelector("#selectedTags"),
-  resultTitle: document.querySelector("#resultTitle"),
-  resultCount: document.querySelector("#resultCount"),
+  selectionSummary: document.querySelector("#selectionSummary"),
   columnsInput: document.querySelector("#columnsInput"),
   columnsCount: document.querySelector("#columnsCount"),
   tagButtonTemplate: document.querySelector("#tagButtonTemplate"),
@@ -72,6 +168,7 @@ function init() {
   if (!restoreLocalData()) return;
   configureColumnControl();
   wireDialog();
+  renderTagCategoryRail();
   renderTagRail();
   render();
 }
@@ -183,14 +280,13 @@ function wireDialog() {
 function renderTagRail() {
   const fragment = document.createDocumentFragment();
 
-  for (const [tag, icon] of getVisibleTags()) {
+  for (const tag of getVisibleTags()) {
     const count = state.counts.get(tag) || 0;
     const button = els.tagButtonTemplate.content.firstElementChild.cloneNode(true);
     button.dataset.tag = tag;
-    button.title = `${tag} · ${count}`;
-    button.querySelector(".tag-icon").textContent = icon;
-    button.querySelector(".tag-name").textContent = tag;
-    button.querySelector(".tag-count").textContent = count;
+    button.title = `${getTagLabel(tag)} · ${tag} · ${count}`;
+    button.querySelector(".tag-name-zh").textContent = getTagLabel(tag);
+    button.querySelector(".tag-name-en").textContent = tag;
     button.addEventListener("click", () => {
       if (state.selectedTags.has(tag)) state.selectedTags.delete(tag);
       else state.selectedTags.add(tag);
@@ -202,21 +298,56 @@ function renderTagRail() {
   els.tagRail.replaceChildren(fragment);
 }
 
+function renderTagCategoryRail() {
+  const fragment = document.createDocumentFragment();
+
+  for (const category of TAG_CATEGORIES) {
+    if (category.key !== "all" && !category.tags.some((tag) => state.counts.has(tag))) continue;
+    const button = document.createElement("button");
+    button.className = "tag-category-button";
+    button.type = "button";
+    button.dataset.category = category.key;
+    button.setAttribute("aria-pressed", String(category.key === state.activeTagCategory));
+    button.innerHTML = `<span>${category.zh}</span><span>${category.en}</span>`;
+    button.addEventListener("click", () => {
+      state.activeTagCategory = category.key;
+      renderTagCategoryRail();
+      renderTagRail();
+      render();
+    });
+    fragment.appendChild(button);
+  }
+
+  els.tagCategoryRail.replaceChildren(fragment);
+}
+
 function getVisibleTags() {
-  const featured = FEATURED_TAGS.filter(([tag]) => state.counts.has(tag));
-  const featuredNames = new Set(featured.map(([tag]) => tag));
-  const extras = Array.from(state.counts.entries())
-    .filter(([tag, count]) => count >= 20 && !featuredNames.has(tag))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 16)
-    .map(([tag]) => [tag, "•"]);
+  const category = getActiveTagCategory();
+  const featured = category.tags.filter((tag) => state.counts.has(tag));
+  const featuredNames = new Set(featured);
+  const extras =
+    category.key === "all"
+      ? Array.from(state.counts.entries())
+          .filter(([tag, count]) => count >= 20 && !featuredNames.has(tag))
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 16)
+          .map(([tag]) => tag)
+      : [];
   return [...featured, ...extras];
+}
+
+function getActiveTagCategory() {
+  return TAG_CATEGORIES.find((item) => item.key === state.activeTagCategory) || TAG_CATEGORIES[0];
+}
+
+function getTagLabel(tag) {
+  return TAG_LABELS[tag] || tag;
 }
 
 function render() {
   const cards = getFilteredCards();
   updateTagButtons();
-  updateSummary(cards);
+  updateSelectionSummary();
   renderCards(cards);
 }
 
@@ -238,11 +369,10 @@ function updateTagButtons() {
   }
 }
 
-function updateSummary(cards) {
+function updateSelectionSummary() {
   const selected = Array.from(state.selectedTags);
-  els.selectedTags.textContent = selected.length ? selected.join(" + ") : "全部内容插画";
-  els.resultTitle.textContent = selected.length ? "Matched Cards" : "Content Cards";
-  els.resultCount.textContent = cards.length;
+  const tagLabel = selected.length ? selected.map((tag) => getTagLabel(tag)).join(" + ") : "全部";
+  els.selectionSummary.textContent = tagLabel;
 }
 
 function renderCards(cards) {

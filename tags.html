@@ -8,17 +8,17 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="PTCG Tags" />
-    <title>PTCG 内容标签 / Content Tags</title>
+    <title>PTCG 插画卡 / Illus. Art</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./tags.css?v=272" />
+    <link rel="stylesheet" href="./tags.css?v=285" />
   </head>
   <body>
     <header class="tag-topbar">
       <div class="brand">
         <div>
           <p class="eyebrow">Pokemon TCG</p>
-          <h1>内容标签 / Content Tags</h1>
+          <h1>插画卡 / Illus. Art</h1>
         </div>
         <nav class="page-links" aria-label="页面 / Pages">
           <a href="./index.html">
@@ -32,7 +32,11 @@
         </nav>
       </div>
       <section class="tag-controls" aria-label="标签筛选 / Tag filters">
-        <button id="clearTagsBtn" class="clear-tags" type="button">全部</button>
+        <div id="tagCategoryRail" class="tag-category-rail" aria-label="标签分类 / Tag categories"></div>
+        <button id="clearTagsBtn" class="clear-tags" type="button">
+          <span>全部</span>
+          <span>All</span>
+        </button>
         <div id="tagRail" class="tag-rail" aria-label="标签 / Tags"></div>
         <label class="density-control">
           <span class="tool-label">
@@ -45,21 +49,16 @@
     </header>
 
     <main>
-      <section class="tag-summary" aria-live="polite">
-        <div>
-          <p id="selectedTags" class="selected-tags">全部内容插画</p>
-          <h2 id="resultTitle">Content Cards</h2>
-        </div>
-        <p id="resultCount" class="result-count">0</p>
-      </section>
+      <p id="selectionSummary" class="selection-summary" aria-live="polite"></p>
       <section id="cardGrid" class="tag-card-grid" aria-label="卡图 / Cards"></section>
     </main>
 
     <template id="tagButtonTemplate">
       <button class="tag-button" type="button">
-        <span class="tag-icon" aria-hidden="true"></span>
-        <span class="tag-name"></span>
-        <span class="tag-count"></span>
+        <span class="tag-name">
+          <span class="tag-name-zh"></span>
+          <span class="tag-name-en"></span>
+        </span>
       </button>
     </template>
 
@@ -87,7 +86,7 @@
     </dialog>
 
     <script src="./asset-config.js?v=247"></script>
-    <script src="./local-data.js?v=272"></script>
-    <script src="./tags.js?v=272"></script>
+    <script src="./local-data.js?v=285"></script>
+    <script src="./tags.js?v=285"></script>
   </body>
 </html>
