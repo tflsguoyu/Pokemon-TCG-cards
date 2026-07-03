@@ -27,7 +27,7 @@ const summary = {
   requested: ids.length,
   added: 0,
   alreadyPresent: 0,
-  imageSourcesPrepared: 0,
+  imageSourcePrepared: 0,
   skippedNonPokemon: [],
   skippedMissingDex: [],
   failed: [],
@@ -53,7 +53,7 @@ for (const id of ids) {
     upsertSetMeta(card.set);
     addCard(data, Number(card.dexId[0]), buildLocalCard(card, data));
     summary.added += 1;
-    summary.imageSourcesPrepared += 1;
+    summary.imageSourcePrepared += 1;
   } catch (error) {
     summary.failed.push({ id, error: String(error?.message || error) });
   }

@@ -63,10 +63,8 @@ function applyToLocalData(decisions) {
       for (const card of cards) {
         if (deleteIds.has(card.id)) {
           stats.removedCards += 1;
-          for (const url of [card.image, card.fallbackImage, card.highImage, card.highFallbackImage]) {
-            if (String(url || "").startsWith("./assets/cards/")) {
-              removedImages.add(String(url).replace(/^\.\//, ""));
-            }
+          if (String(card.image || "").startsWith("./assets/cards/")) {
+            removedImages.add(String(card.image).replace(/^\.\//, ""));
           }
           continue;
         }

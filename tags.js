@@ -1,4 +1,4 @@
-const CACHE_VERSION = 249;
+const CACHE_VERSION = 267;
 
 const FEATURED_TAGS = [
   ["sleeping", "💤"],
@@ -301,8 +301,8 @@ function getCardReleaseTime(card) {
 }
 
 function getCardSourceLabel(card) {
-  const printedNumber = getPrintedNumber(card);
-  return [getSetName(card), printedNumber ? `#${printedNumber}` : "", card.rarity].filter(Boolean).join(" · ");
+  const printedNumber = getCaptionCardNumber(card);
+  return [getSetName(card), printedNumber ? `#${printedNumber}` : ""].filter(Boolean).join(" · ");
 }
 
 function getSetMeta(card) {
@@ -322,4 +322,8 @@ function getPrintedNumber(card) {
   }
   const total = getSetMeta(card).total;
   return number && total ? `${number}/${total}` : number;
+}
+
+function getCaptionCardNumber(card) {
+  return String(getPrintedNumber(card) || "").split("/")[0];
 }

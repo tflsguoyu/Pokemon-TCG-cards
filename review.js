@@ -69,6 +69,7 @@ function wireControls() {
 function loadCards() {
   const data = window.PTCG_LOCAL_DATA || {};
   const speciesCn = new Map((data.species_cn || []).map(([id, name]) => [Number(id), name]));
+  const speciesJa = new Map((data.species_ja || []).map(([id, name]) => [Number(id), name]));
   state.setsById = new Map(data.setsById || []);
   const cardsById = new Map();
 
@@ -80,7 +81,7 @@ function loadCards() {
         dexId: Number(dexId),
         dexIds: cardDexIds,
         zhName: speciesCn.get(Number(dexId)) || "",
-        dexSearchText: getDexSearchText(cardDexIds, data.species || [], speciesCn),
+        dexSearchText: getDexSearchText(cardDexIds, data.species || [], speciesCn, speciesJa),
         originalBackgroundType: normalizeBackgroundType(card.backgroundType),
         originalIsShiny: Boolean(card.isShiny),
         ...card,
@@ -110,7 +111,7 @@ function compareSetCode(a, b) {
 
 function getEraRank(card) {
   const era = getReviewEraCode(card);
-  const ranks = ["BASE", "EX", "DP", "PL", "HGSS", "BW", "XY", "SM", "SWSH", "SV", "ME", "简中"];
+  const ranks = ["BASE", "EX", "DP", "PL", "HGSS", "BW", "XY", "SM", "SWSH", "SV", "ME", "日文", "简中"];
   const rank = ranks.indexOf(era);
   return rank === -1 ? 999 : rank;
 }
@@ -635,14 +636,13 @@ function openImage(card) {
   const imageUrl = getImageUrl(card);
   if (!imageUrl) return;
   els.dialogImage.src = imageUrl;
-  els.dialogImage.alt = `${card.cardName} ${formatCardCode(card)}`;
-  els.dialogCaption.textContent = `${card.cardName} · ${formatCardCode(card)}`;
+  els.dialogImage.alt = `${card.cardName} ${formatDialogCardCode(card)}`;
+  els.dialogCaption.textContent = `${card.cardName} · ${formatDialogCardCode(card)}`;
   els.imageDialog.showModal();
 }
 
 function getImageUrl(card) {
-  const source = (card.imageSources || []).find((item) => item.low || item.high);
-  return resolveCardImageUrl(source?.low || source?.high || card.image || "");
+  return resolveCardImageUrl(card.image || "");
 }
 
 function resolveCardImageUrl(url) {
@@ -654,7 +654,13 @@ function isSimplifiedChineseCard(card) {
   return language === "CN";
 }
 
+function isJapaneseCard(card) {
+  const language = String(card.language || "").trim().toUpperCase();
+  return language === "JP";
+}
+
 function getReviewEraCode(card) {
+  if (isJapaneseCard(card)) return "日文";
   return isSimplifiedChineseCard(card) ? "简中" : getMenuEraCode(card);
 }
 
@@ -665,6 +671,14 @@ function formatCardCode(card) {
   const number = getMenuCardNumber(card);
   const shiny = getShinyDecision(card) ? "Shiny" : "Non-shiny";
   return `[${language}] ${[era, setCode, number].filter(Boolean).join("-")} · ${card.label} · ${card.originalBackgroundType} · ${shiny}`;
+}
+
+function formatDialogCardCode(card) {
+  const language = card.language || "EN";
+  const era = getMenuEraCode(card);
+  const setCode = getMenuSetCode(card);
+  const number = getMenuCardNumber(card);
+  return `[${language}] ${[era, setCode, number].filter(Boolean).join("-")}`;
 }
 
 function getMenuEraCode(card) {
@@ -744,10 +758,15 @@ function getCardDexIds(card, fallbackDexId) {
   return Array.from(new Set(ids.map(Number).filter((id) => Number.isFinite(id) && id > 0)));
 }
 
-function getDexSearchText(dexIds, species, speciesCn) {
+function getDexSearchText(dexIds, species, speciesCn, speciesJa) {
   const speciesById = new Map(species.map((mon) => [Number(mon.id), mon.name]));
   return dexIds
-    .flatMap((dexId) => [String(dexId).padStart(4, "0"), speciesById.get(dexId) || "", speciesCn.get(dexId) || ""])
+    .flatMap((dexId) => [
+      String(dexId).padStart(4, "0"),
+      speciesById.get(dexId) || "",
+      speciesCn.get(dexId) || "",
+      speciesJa.get(dexId) || "",
+    ])
     .join(" ");
 }
 

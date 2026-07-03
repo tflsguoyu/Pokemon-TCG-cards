@@ -1,4 +1,4 @@
-const CACHE_VERSION = 249;
+const CACHE_VERSION = 267;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -21,6 +21,7 @@ const COLUMN_STORAGE_KEYS = {
 const state = {
   species: [],
   speciesCnByDex: new Map(),
+  speciesJaByDex: new Map(),
   setsById: new Map(),
   cardsByDex: new Map(),
   query: "",
@@ -221,6 +222,7 @@ function restoreLocalData() {
 
   state.species = data.species || [];
   state.speciesCnByDex = new Map((data.species_cn || []).map(([id, name]) => [Number(id), name]));
+  state.speciesJaByDex = new Map((data.species_ja || []).map(([id, name]) => [Number(id), name]));
   state.setsById = new Map(data.setsById || []);
   state.cardsByDex = buildCardsByDexIndex(data.cardsByDex || []);
 
@@ -290,19 +292,21 @@ function getScopedSpecies() {
   return base.filter((mon) => {
     const hasCards = state.cardsByDex.has(mon.id);
     const cnName = state.speciesCnByDex.get(mon.id) || "";
+    const jaName = state.speciesJaByDex.get(mon.id) || "";
     const inRange = mon.id >= start && mon.id <= end;
-    const queryText = getSpeciesSearchText(mon, cnName);
+    const queryText = getSpeciesSearchText(mon, cnName, jaName);
     const matchesQuery = !state.query || queryText.includes(state.query);
     return inRange && matchesQuery;
   });
 }
 
-function getSpeciesSearchText(mon, cnName) {
+function getSpeciesSearchText(mon, cnName, jaName) {
   const cards = state.cardsByDex.get(mon.id) || [];
   return [
     String(mon.id).padStart(4, "0"),
     mon.name,
     cnName,
+    jaName,
     getSpeciesTagText(mon.id),
     ...cards.flatMap((card) => [card.cardName, getCardDexSearchText(card, mon.id)]),
   ]
@@ -319,7 +323,12 @@ function getCardDexSearchText(card, fallbackDexId) {
   return getCardDexIds(card, fallbackDexId)
     .flatMap((dexId) => {
       const species = state.species.find((mon) => Number(mon.id) === dexId);
-      return [String(dexId).padStart(4, "0"), species?.name || "", state.speciesCnByDex.get(dexId) || ""];
+      return [
+        String(dexId).padStart(4, "0"),
+        species?.name || "",
+        state.speciesCnByDex.get(dexId) || "",
+        state.speciesJaByDex.get(dexId) || "",
+      ];
     })
     .join(" ");
 }
@@ -612,9 +621,8 @@ function updateImageNavButtons() {
 }
 
 function getCardSourceLabel(card) {
-  if (card.source) return card.source;
-  const printedNumber = getPrintedNumber(card);
-  return [getSetName(card), printedNumber ? `#${printedNumber}` : "", card.rarity].filter(Boolean).join(" · ");
+  const printedNumber = getCaptionCardNumber(card);
+  return [getSetName(card), printedNumber ? `#${printedNumber}` : ""].filter(Boolean).join(" · ");
 }
 
 function formatCardOptionLabel(card) {
@@ -677,6 +685,10 @@ function getPrintedNumber(card) {
   return number && total ? `${number}/${total}` : number;
 }
 
+function getCaptionCardNumber(card) {
+  return String(getPrintedNumber(card) || "").split("/")[0];
+}
+
 function formatMenuNumberPart(number) {
   return /^\d+$/.test(number) ? String(Number(number)) : number;
 }
@@ -688,47 +700,11 @@ function getSetDisplayCode(setId) {
 }
 
 function getImageUrls(card, size) {
-  const sources = getLocalImageSources(card) || [];
-
-  const urls = [];
-  for (const source of sources) {
-    if (size === "high") {
-      urls.push(source.high, source.fallbackHigh, source.low, source.fallbackLow);
-    } else {
-      urls.push(source.low, source.fallbackLow);
-    }
-  }
-
-  return Array.from(new Set(urls.filter(Boolean).map(resolveCardImageUrl)));
+  return [card.image].filter(Boolean).map(resolveCardImageUrl);
 }
 
 function resolveCardImageUrl(url) {
   return window.PTCG_ASSETS?.resolveCardImageUrl(url) || url;
-}
-
-function getLocalImageSources(card) {
-  const localSources = (card.imageSources || []).filter((source) => {
-    const urls = [source.low, source.fallbackLow, source.high, source.fallbackHigh].filter(Boolean);
-    return urls.some((url) => String(url).startsWith("./assets/cards/"));
-  });
-
-  if (localSources.length) return localSources;
-
-  const localUrls = [card.image, card.fallbackImage, card.highImage, card.highFallbackImage].filter((url) =>
-    String(url || "").startsWith("./assets/cards/")
-  );
-
-  if (!localUrls.length) return null;
-
-  const localUrl = localUrls[0];
-  return [
-    {
-      low: localUrl,
-      fallbackLow: localUrl,
-      high: localUrl,
-      fallbackHigh: localUrl,
-    },
-  ];
 }
 
 function applyImageUrls(image, urls, onExhausted) {

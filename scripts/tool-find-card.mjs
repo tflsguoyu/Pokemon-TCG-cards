@@ -69,8 +69,8 @@ function getDexSearchText(dexIds) {
 }
 
 function getPrimaryPokemonName(card, fallbackDexId) {
-  const primaryDexId = Number(card.primaryDexId || getCardDexIds(card, fallbackDexId)[0] || fallbackDexId);
-  const species = (data.species || []).find((mon) => Number(mon.id) === primaryDexId);
+  const firstDexId = Number(getCardDexIds(card, fallbackDexId)[0] || fallbackDexId);
+  const species = (data.species || []).find((mon) => Number(mon.id) === firstDexId);
   return species?.name || "";
 }
 

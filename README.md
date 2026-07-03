@@ -280,14 +280,13 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 }
 ```
 
-`dexIds` 和 `primaryDexId` 只在一张卡对应多个全国图鉴编号时使用，比如 Tag Team。卡片实体只保留一份；页面加载时会用 `dexIds` 动态挂到多个宝可梦下面。
+`dexIds` 只在一张卡对应多个全国图鉴编号时使用，比如 Tag Team。卡片实体只保留一份；页面加载时会用 `dexIds` 动态挂到多个宝可梦下面。
 
 ```js
 {
   id: "sm9-162",
   cardName: "Pikachu & Zekrom GX",
-  dexIds: [25, 644],
-  primaryDexId: 25
+  dexIds: [25, 644]
 }
 ```
 
@@ -320,6 +319,7 @@ fallbackImage
 highImage
 highFallbackImage
 imageSources
+primaryDexId
 updated
 form.pattern
 ```
