@@ -740,7 +740,7 @@ h2 {
 
   .page-links {
     flex: 0 0 auto;
-    flex-direction: column;
+    flex-direction: row;
     gap: 3px;
     width: auto;
   }
