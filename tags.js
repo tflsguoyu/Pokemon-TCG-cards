@@ -1,4 +1,4 @@
-const CACHE_VERSION = 271;
+const CACHE_VERSION = 272;
 
 const FEATURED_TAGS = [
   ["sleeping", "💤"],
