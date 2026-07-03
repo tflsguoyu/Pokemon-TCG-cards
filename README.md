@@ -78,16 +78,20 @@ node scripts/02-download-card-images.mjs
 
 核心原则：
 
-1. 英文卡本地 id 使用 TCGdex card id，例如 `me02.5-270`、`sv03.5-166`。
+1. 英文实体卡本地 id 使用 TCGdex card id，例如 `me02.5-270`、`sv03.5-166`。
 2. 简体中文独占卡使用自定义小写 id，例如 `cbb1c-07-09`、`151c-170`。
-3. 英文卡 metadata 主要来自 TCGdex API；简体中文独占卡以本地整理为准。
-4. 英文实体卡图片来源必须是 Scrydex。
-5. 简体中文独占卡图片来源优先使用 Pokemon.cn；少量尚未替换的旧图可暂时保留 PokiPair。
-6. Scrydex 图片只拿 `/large`；Pokemon.cn 和 PokiPair 图片只拿记录的原始 URL。
-7. 不从其他网站兜底下载图片。
-8. 禁止收录 Pokemon TCG Pocket。`A1/A2...`、`B1/B1a/B2...` 这类 Pocket 系列不属于实体卡。
+3. Pokemon TCG Pocket 可以收录，项目简称统一写 `PTCGP`。Pocket 卡不按英文实体卡规则处理，不从 TCGdex 查 set / card，也不套实体卡 Scrydex 路径规则。
+4. Pocket 卡从 Scrydex Pocket expansions 入口查找：https://scrydex.com/pokemon/tcg-pocket/expansions。系列 id 以页面列出的 `tcgp-*` 为准，例如 `tcgp-A1`、`tcgp-A1a`、`tcgp-PA`。
+5. Pocket 卡本地 id 使用规范化小写格式：`tcgp-a1-001`、`tcgp-a1a-086`、`tcgp-pa-001`。
+6. Pocket 卡的 `language` 统一写 `PK`，不写 `EN` / `JP` / `CN`。
+7. 英文实体卡 metadata 主要来自 TCGdex API；简体中文独占卡以本地整理为准；Pocket 卡 metadata 以 Scrydex Pocket 页面和本地整理为准。
+8. 英文实体卡图片来源必须是 Scrydex。
+9. 简体中文独占卡图片来源优先使用 Pokemon.cn；少量尚未替换的旧图可暂时保留 PokiPair。
+10. Pocket 卡图片从 Scrydex Pocket 卡页 / 图片地址获取；每张卡必须记录 `imageSource`，不要和实体卡 Scrydex 路径混用。
+11. Scrydex 实体卡图片只拿 `/large`；Pokemon.cn、PokiPair 和 Pocket 图片只拿记录的原始 URL。
+12. 不从其他网站兜底下载图片。
 
-TCGdex 查不到 metadata 的少量卡会使用已有本地 JSON 信息兜底，但图片规则仍然只允许 Scrydex、Pokemon.cn 或 PokiPair。
+TCGdex 查不到 metadata 的少量实体卡会使用已有本地 JSON 信息兜底，但图片规则仍然只允许 Scrydex、Pokemon.cn 或 PokiPair。Pocket 卡不按实体卡 TCGdex / Scrydex 路径规则兜底，只从 Scrydex Pocket 入口继续查。
 
 ## 图片规则
 
@@ -129,11 +133,13 @@ GitHub Pages 站点大小建议控制在 1GB 以内，所以卡图不要跟页�
 https://github.com/tflsguoyu/Pokemon-TCG-cards/releases/download/card-assets-sv/sv04.5-127.webp
 ```
 
-当前分 3 个 Release，保证每个 release 附件数低于 GitHub 的 1000 个上限：
+当前分 5 个 Release，保证每个 release 附件数低于 GitHub 的 1000 个上限：
 
 ```text
 card-assets-sv        sv/svp/csv/cs/cbb/151c 开头的卡图
 card-assets-swsh-me   swsh/me/mep 开头的卡图
+card-assets-ptcgp     tcgp-a 开头的 Pokemon TCG Pocket A 系列卡图
+card-assets-ptcgp-b   tcgp-b 开头的 Pokemon TCG Pocket B 系列卡图
 card-assets-legacy    其他旧系列卡图
 ```
 
@@ -307,6 +313,45 @@ swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 
 显示时会派生成 `0709/09`；菜单和查找 code 会显示成 `7-9`。
 
+Pocket 卡使用独立系列 id，不和实体卡系列混在一起。`setId` 使用 Scrydex Pocket 页面列出的 `tcgp-*`，保留原大小写；本地卡 `id` 使用小写 `tcgp-*`。`number` 保留 Pocket 卡面编号本身；如果卡面编号有星级、皇冠、promo 等展示信息，写在 `label` / `rarity`，不要塞进 `number`。
+
+```js
+[
+  [
+    "tcgp-A1",
+    {
+      eraCode: "PTCGP",
+      ptcgoCode: "A1",
+      name: "Genetic Apex",
+      total: "226",
+      releaseDate: "2024-10-30"
+    }
+  ]
+]
+```
+
+```js
+{
+  id: "tcgp-a1-001",
+  language: "PK",
+  cardName: "Bulbasaur",
+  image: "./assets/cards/tcgp-a1-001.webp",
+  form: { key: "base", label: "Base", rank: 0 },
+  isShiny: false,
+  backgroundType: "content",
+  tags: ["forest", "plants", "solo", "green"],
+  setId: "tcgp-A1",
+  number: "001",
+  rarity: "Diamond",
+  label: "PTCGP",
+  imageSource: {
+    provider: "PTCGP",
+    url: "https://..."
+  },
+  rank: 4
+}
+```
+
 这些字段不要写在单张卡里；系列级信息统一放在 `setsById`，显示字段运行时派生：
 
 ```text
@@ -375,6 +420,11 @@ TG     Trainer Gallery               rank 1
 GG     Galarian Gallery              rank 1
 FA     Ultra Rare                    rank 3
 Promo  Promo                         rank 4
+1 Star Pokemon TCG Pocket 1 Star     rank 1
+2 Star Pokemon TCG Pocket 2 Star     rank 2
+3 Star Pokemon TCG Pocket 3 Star     rank 2
+Crown  Pokemon TCG Pocket Crown      rank 2
+Shiny  Pokemon TCG Pocket shiny      rank 1
 ```
 
 ## 本地运行

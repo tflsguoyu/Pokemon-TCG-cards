@@ -32,12 +32,12 @@ export function syncProjectVersion(version) {
   updateFile("sw.js", (text) =>
     text
       .replace(/ptcg-national-dex-v\d+/g, `ptcg-national-dex-v${normalized}`)
-      .replace(/(\.\/(?:form-index|local-data|app|tags)\.js\?v=)\d+/g, `$1${normalized}`)
+      .replace(/(\.\/(?:asset-config|form-index|local-data|app|tags)\.js\?v=)\d+/g, `$1${normalized}`)
       .replace(/(\.\/(?:styles|tags)\.css\?v=)\d+/g, `$1${normalized}`)
   );
-  updateFile("index.html", (text) => text.replace(/(\.\/(?:styles\.css|form-index\.js|local-data\.js|app\.js)\?v=)\d+/g, `$1${normalized}`));
-  updateFile("tags.html", (text) => text.replace(/(\.\/(?:tags\.css|local-data\.js|tags\.js)\?v=)\d+/g, `$1${normalized}`));
-  updateFile("review.html", (text) => text.replace(/(\.\/(?:review\.css|local-data\.js|review\.js)\?v=)\d+/g, `$1${normalized}`));
+  updateFile("index.html", (text) => text.replace(/(\.\/(?:styles\.css|asset-config\.js|form-index\.js|local-data\.js|app\.js)\?v=)\d+/g, `$1${normalized}`));
+  updateFile("tags.html", (text) => text.replace(/(\.\/(?:tags\.css|asset-config\.js|local-data\.js|tags\.js)\?v=)\d+/g, `$1${normalized}`));
+  updateFile("review.html", (text) => text.replace(/(\.\/(?:review\.css|asset-config\.js|local-data\.js|review\.js)\?v=)\d+/g, `$1${normalized}`));
 }
 
 function updateFile(path, transform) {

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 285;
+const CACHE_VERSION = 303;
 
 const FEATURED_TAGS = [
   "sleeping",
@@ -238,10 +238,11 @@ function restoreLocalData() {
 
   for (const [dexId, dexCards] of data.cardsByDex || []) {
     for (const card of dexCards || []) {
-      if (card.backgroundType !== "content" || !Array.isArray(card.tags) || !card.image) continue;
+      if (card.backgroundType !== "content" || !card.image) continue;
       if (cardsById.has(card.id)) continue;
-      const normalizedTags = Array.from(new Set(card.tags.map((tag) => String(tag).trim()).filter(Boolean)));
-      if (!normalizedTags.length) continue;
+      const normalizedTags = Array.isArray(card.tags)
+        ? Array.from(new Set(card.tags.map((tag) => String(tag).trim()).filter(Boolean)))
+        : [];
       const uniqueCard = {
         ...card,
         dexId: Number(dexId),

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 285;
+const CACHE_VERSION = 304;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -13,6 +13,12 @@ const NATIONAL_DEX_RANGES = {
 };
 
 const REGIONAL_FORM_KEYS = new Set(["alolan", "galarian", "hisuian", "paldean"]);
+const MENU_LANGUAGE_ORDER = new Map([
+  ["EN", 0],
+  ["JP", 1],
+  ["CN", 2],
+  ["PK", 3],
+]);
 const COLUMN_STORAGE_KEYS = {
   desktop: "ptcg.index.desktopColumns",
   mobile: "ptcg.index.mobileColumns",
@@ -562,6 +568,9 @@ function sortCardsForMenu(cards) {
 }
 
 function compareCardsByRelease(a, b) {
+  const languageDiff = getMenuLanguageRank(a) - getMenuLanguageRank(b);
+  if (languageDiff) return languageDiff;
+
   const releaseDiff = getCardReleaseTime(b) - getCardReleaseTime(a);
   if (releaseDiff) return releaseDiff;
 
@@ -569,6 +578,11 @@ function compareCardsByRelease(a, b) {
   if (numberDiff) return numberDiff;
 
   return String(a.id || "").localeCompare(String(b.id || ""), undefined, { numeric: true });
+}
+
+function getMenuLanguageRank(card) {
+  const language = String(card.language || "EN").toUpperCase();
+  return MENU_LANGUAGE_ORDER.get(language) ?? MENU_LANGUAGE_ORDER.size;
 }
 
 function getCardReleaseTime(card) {

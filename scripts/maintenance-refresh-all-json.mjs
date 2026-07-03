@@ -68,6 +68,7 @@ writeSummary();
 console.log(JSON.stringify(summary, null, 2));
 
 async function getTcgdexCard(id) {
+  if (isPocketCardId(id)) return null;
   try {
     const response = await fetch(`https://api.tcgdex.net/v2/en/cards/${encodeURIComponent(id)}`);
     if (!response.ok) return null;
@@ -121,6 +122,8 @@ async function refreshSetReleaseDates() {
 }
 
 function refreshLocalCard(card, remote, currentDexId) {
+  if (isPocketCard(card)) return;
+
   const dexId = Number(remote?.dexId?.[0] || currentDexId);
   const set = remote?.set || {};
   const setId = String(set.id || card.setId || card.id.split("-")[0] || "");
@@ -153,6 +156,14 @@ function refreshLocalCard(card, remote, currentDexId) {
     name: set.name || getSetMeta(card).name || "",
     total: officialCount || getSetMeta(card).total || "",
   });
+}
+
+function isPocketCard(card) {
+  return String(card?.language || "").toUpperCase() === "PK" || isPocketCardId(card?.id);
+}
+
+function isPocketCardId(id) {
+  return /^tcgp-/i.test(String(id || ""));
 }
 
 function getPtcgoCode(remote, card) {

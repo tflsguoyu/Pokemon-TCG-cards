@@ -19,6 +19,18 @@ const GROUPS = [
     test: /^(swsh|me|mep)/i,
   },
   {
+    key: "ptcgp",
+    tag: "card-assets-ptcgp",
+    title: "PTCG card assets - Pokemon TCG Pocket A / Promo series",
+    test: /^tcgp-(?:a|p)/i,
+  },
+  {
+    key: "ptcgp-b",
+    tag: "card-assets-ptcgp-b",
+    title: "PTCG card assets - Pokemon TCG Pocket B series",
+    test: /^tcgp-b/i,
+  },
+  {
     key: "legacy",
     tag: "card-assets-legacy",
     title: "PTCG card assets - Legacy",

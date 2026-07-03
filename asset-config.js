@@ -3,6 +3,8 @@
   const RELEASE_TAGS = {
     sv: "card-assets-sv",
     "swsh-me": "card-assets-swsh-me",
+    ptcgp: "card-assets-ptcgp",
+    "ptcgp-b": "card-assets-ptcgp-b",
     legacy: "card-assets-legacy",
   };
 
@@ -24,6 +26,8 @@
   function getCardAssetGroup(fileName) {
     if (/^(sv|svp|csv|cs|cbb|151c)/i.test(fileName)) return "sv";
     if (/^(swsh|me|mep)/i.test(fileName)) return "swsh-me";
+    if (/^tcgp-b/i.test(fileName)) return "ptcgp-b";
+    if (/^tcgp/i.test(fileName)) return "ptcgp";
     return "legacy";
   }
 
