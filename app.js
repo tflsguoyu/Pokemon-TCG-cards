@@ -1,4 +1,4 @@
-const CACHE_VERSION = 304;
+const CACHE_VERSION = 305;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -844,6 +844,6 @@ function registerServiceWorker() {
   if (location.protocol === "file:") return;
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    navigator.serviceWorker.register(`./sw.js?v=${CACHE_VERSION}`).then((registration) => registration.update()).catch(() => {});
   });
 }
