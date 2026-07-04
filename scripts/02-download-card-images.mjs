@@ -114,6 +114,7 @@ async function refreshCard(card, index) {
     downloaded.find((item) => item.provider === "Scrydex" && hasTransparentPixels(item.info)) ||
     downloaded.find((item) => item.provider === "Scrydex" && item.sourcePath) ||
     downloaded.find((item) => item.provider === "Pokemon.cn" && item.sourcePath) ||
+    downloaded.find((item) => item.provider === "Pokemon Asia TW" && item.sourcePath) ||
     downloaded.find((item) => item.provider === "PokiPair" && item.sourcePath);
 
   if (!selected) {
@@ -155,11 +156,13 @@ function getCandidates(card) {
   const sourceUrl = String(card.imageSource?.url || "");
   const sourceProvider = String(card.imageSource?.provider || "").toLowerCase();
   const isPokemonCnSource = isPokemonCnUrl(sourceUrl) || sourceProvider === "pokemon.cn";
+  const isPokemonAsiaSource = isPokemonAsiaUrl(sourceUrl) || sourceProvider === "pokemon asia tw";
   const isPokiPairSource = isPokiPairUrl(sourceUrl) || sourceProvider === "pokipair";
-  const shouldUseChineseSource = isPokemonCnSource || isPokiPairSource || isSimplifiedChineseCard(card);
+  const shouldUseChineseSource = isPokemonCnSource || isPokemonAsiaSource || isPokiPairSource || isSimplifiedChineseCard(card);
 
   if (shouldUseChineseSource) {
     if (isPokemonCnUrl(sourceUrl)) candidates.push({ provider: "Pokemon.cn", url: sourceUrl });
+    if (isPokemonAsiaUrl(sourceUrl)) candidates.push({ provider: "Pokemon Asia TW", url: sourceUrl });
     if (isPokiPairUrl(sourceUrl)) candidates.push({ provider: "PokiPair", url: sourceUrl });
     return candidates;
   }
@@ -235,6 +238,10 @@ function isPokiPairUrl(url) {
 
 function isPokemonCnUrl(url) {
   return /^https:\/\/(?:image\.pokemon\.com\.cn|special\.pokemon\.cn)\//i.test(url);
+}
+
+function isPokemonAsiaUrl(url) {
+  return /^https:\/\/asia\.pokemon-card\.com\/tw\/card-img\//i.test(url);
 }
 
 function isSimplifiedChineseCard(card) {

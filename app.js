@@ -1,4 +1,4 @@
-const CACHE_VERSION = 307;
+const CACHE_VERSION = 314;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -17,7 +17,8 @@ const MENU_LANGUAGE_ORDER = new Map([
   ["EN", 0],
   ["JP", 1],
   ["CN", 2],
-  ["PK", 3],
+  ["TW", 3],
+  ["PK", 4],
 ]);
 const COLUMN_STORAGE_KEYS = {
   desktop: "ptcg.index.desktopColumns",
