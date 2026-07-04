@@ -1,4 +1,4 @@
-const CACHE_VERSION = 305;
+const CACHE_VERSION = 307;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -611,8 +611,22 @@ function renderHighResImage(card) {
   const imageUrls = getImageUrls(card, "high");
   applyImageUrls(els.dialogImage, imageUrls);
   els.dialogImage.alt = `${card.cardName} ${getCardSourceLabel(card)}`;
-  els.dialogCaption.textContent = `${card.cardName} · ${getCardSourceLabel(card)}`;
+  renderImageCaption(els.dialogCaption, card);
   updateImageNavButtons();
+}
+
+function renderImageCaption(caption, card) {
+  caption.replaceChildren();
+
+  const name = document.createElement("span");
+  name.className = "caption-card-name";
+  name.textContent = card.cardName;
+  caption.appendChild(name);
+
+  const meta = document.createElement("span");
+  meta.className = "caption-card-meta";
+  meta.textContent = getCardSourceLabel(card);
+  caption.appendChild(meta);
 }
 
 function showAdjacentHighResImage(direction) {

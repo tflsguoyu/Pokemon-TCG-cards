@@ -614,10 +614,23 @@ h2 {
 }
 
 .image-dialog figcaption {
+  display: grid;
+  gap: 3px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
+  line-height: 1.25;
   text-align: center;
+}
+
+.caption-card-name {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.caption-card-meta {
+  color: var(--muted);
 }
 
 .image-nav {

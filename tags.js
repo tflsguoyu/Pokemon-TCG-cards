@@ -1,4 +1,4 @@
-const CACHE_VERSION = 305;
+const CACHE_VERSION = 307;
 
 const FEATURED_TAGS = [
   "sleeping",
@@ -411,8 +411,22 @@ function formatDexLabel(card) {
 function openImage(card) {
   els.dialogImage.src = resolveCardImageUrl(card.image);
   els.dialogImage.alt = `${card.cardName} ${getCardSourceLabel(card)}`;
-  els.dialogCaption.textContent = `${card.cardName} · ${getCardSourceLabel(card)}`;
+  renderImageCaption(els.dialogCaption, card);
   els.imageDialog.showModal();
+}
+
+function renderImageCaption(caption, card) {
+  caption.replaceChildren();
+
+  const name = document.createElement("span");
+  name.className = "caption-card-name";
+  name.textContent = card.cardName;
+  caption.appendChild(name);
+
+  const meta = document.createElement("span");
+  meta.className = "caption-card-meta";
+  meta.textContent = getCardSourceLabel(card);
+  caption.appendChild(meta);
 }
 
 function resolveCardImageUrl(url) {
