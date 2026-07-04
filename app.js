@@ -1,4 +1,4 @@
-const CACHE_VERSION = 314;
+const CACHE_VERSION = 316;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],

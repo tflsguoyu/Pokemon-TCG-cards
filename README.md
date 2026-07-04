@@ -1,104 +1,163 @@
 # Pokemon TCG National Dex
 
-静态 Pokemon TCG 全国图鉴。对外页面是 `index.html`，自用审核页面是 `review.html`。
+静态 Pokemon TCG 全国图鉴。对外页面是 `index.html`，自用审核页面是 `review.html`，标签浏览页是 `tags.html`。
 
-页面只读取本地数据；本地开发时读取 `assets/cards`，GitHub Pages 上会自动从 GitHub Releases 读取卡图。
+页面只读取本地数据。开发时图片来自 `assets/cards`；GitHub Pages 上通过 `asset-config.js` 自动改用 GitHub Releases 里的卡图。
 
-## 文件结构
+## 常用流程
 
-```text
-index.html                         对外展示页
-app.js                             对外页逻辑
-styles.css                         对外页样式
-tags.html                          内容标签浏览页
-tags.js                            内容标签页逻辑
-tags.css                           内容标签页样式
-review.html                        自用审核页
-review.js                          审核页逻辑
-review.css                         审核页样式
-local-data.js                      当前卡库数据
-form-index.js                      宝可梦地区形态、Mega 等形态索引
-assets/cards/                      本地卡图，统一高度 825px 的 WebP
-asset-config.js                    线上卡图地址配置，把本地卡图路径映射到 GitHub Releases
-assets/icons/                      PWA 图标
-manifest.webmanifest               PWA manifest
-sw.js                              Service Worker
-```
+### 添加英文实体卡
 
-## 常用脚本
-
-```text
-scripts/01-add-card-json.mjs                  主流程第 1 步：添加指定 TCGdex card id 的 JSON 信息，不下载图片
-scripts/02-download-card-images.mjs           主流程第 2 步：按 JSON 里的图片图源下载图片并转成本地 WebP
-scripts/03-upload-release-assets.mjs          把本地卡图按分组上传到 GitHub Releases
-scripts/maintenance-refresh-all-json.mjs      维护：刷新全量本地卡牌 JSON 信息，不下载图片
-scripts/maintenance-apply-review-results.mjs  维护：应用审核页保存的结果
-scripts/tool-find-card.mjs                    工具：本地查卡
-scripts/lib-version-utils.mjs                 公共库：写入 local-data.js 并同步缓存版本
-```
-
-## 添加新卡
-
-添加新卡分两步。
-
-第一步：生成或更新卡牌 JSON 信息。
+第一步：从 TCGdex 获取 metadata，写入 `local-data.js`。
 
 ```sh
 node scripts/01-add-card-json.mjs swsh9-TG01 swsh12.5-GG01 sv10.5b-087
 ```
 
-这个脚本只负责数据：
-
-- 主要从 TCGdex API 获取卡牌 metadata
-- 写入 `cardName`
-- 写入英文实体卡的 Scrydex 图片来源
-- 不下载图片
-
-简体中文独占卡目前以手动整理为主，图片来源优先使用 Pokemon.cn。
-
-第二步：按 JSON 里的图源下载图片。
+第二步：按 `imageSource` 下载图片并转成本地 WebP。
 
 ```sh
 REFRESH_IMAGE_IDS="swsh9-TG01,swsh12.5-GG01,sv10.5b-087" node scripts/02-download-card-images.mjs
 ```
 
-如果要刷新全量 JSON：
+### 添加 Pocket 卡
 
-```sh
-node scripts/maintenance-refresh-all-json.mjs
+Pocket 卡不走 TCGdex，不套实体卡 Scrydex 路径规则。
+
+入口：
+
+```text
+https://scrydex.com/pokemon/tcg-pocket/expansions
 ```
 
-如果要刷新全量图片：
+规则：
 
-```sh
-node scripts/02-download-card-images.mjs
+- 项目简称写 `PTCGP`
+- `language` 统一写 `PK`
+- `setId` 使用 Scrydex Pocket 页面里的 `tcgp-*`，保留原大小写，例如 `tcgp-A1`
+- 本地 `id` 使用小写格式，例如 `tcgp-a1-001`
+- 图片来源使用 Scrydex Pocket 卡页或图片地址，不和实体卡路径混用
+
+### Dex App 兜底拿图
+
+当 TCGdex/Scrydex 暂未更新，或者 Scrydex 返回卡背占位图，但本机 Dex 已经能显示真实卡图时，可以用 Dex 本地缓存兜底。
+
+Dex 已确认的数据入口：
+
+```text
+clients.dextcg.com
+static.dextcg.com
 ```
 
-## 数据源规则
+Dex Kingfisher 图片缓存默认在：
 
-核心原则：
+```text
+~/Library/Containers/pedrommcarrasco.Dex/Data/Library/Caches/com.onevcat.Kingfisher.ImageCache.default
+```
 
-1. 英文实体卡本地 id 使用 TCGdex card id，例如 `me02.5-270`、`sv03.5-166`。
+推荐流程：
+
+```sh
+node scripts/tool-import-dex-cache-image.mjs --clear-cache --yes
+```
+
+然后在 Dex 里打开目标系列和目标卡，让它重新缓存大图。
+
+列出最近缓存的大图：
+
+```sh
+node scripts/tool-import-dex-cache-image.mjs --list --minutes 0
+```
+
+生成对照图：
+
+```sh
+node scripts/tool-import-dex-cache-image.mjs --sheet --minutes 0
+```
+
+导入确认后的图片：
+
+```sh
+node scripts/tool-import-dex-cache-image.mjs mep-107=8e4c06d342193b5e6c5afefa9dab7ee4
+```
+
+一次导入多张：
+
+```sh
+node scripts/tool-import-dex-cache-image.mjs mep-107=缓存文件名 mep-108=缓存文件名
+```
+
+Dex 缓存文件名不能反推出原始 URL，所以来源写成：
+
+```js
+imageSource: {
+  provider: "Dex local cache",
+  url: "dex-cache:mep-107"
+}
+```
+
+注意：Dex 兜底只解决图片。卡名、编号、全国编号、标签仍然要人工核对；不要把 release date 写进单卡。
+
+### 上传图片到 GitHub Releases
+
+本地卡图不进 Git，线上图通过 Releases 托管。
+
+先看分组和缺失情况：
+
+```sh
+node scripts/03-upload-release-assets.mjs
+```
+
+确认后上传：
+
+```sh
+node scripts/03-upload-release-assets.mjs --execute
+```
+
+## 数据规则
+
+核心规则：
+
+1. 英文实体卡本地 `id` 使用 TCGdex card id，例如 `me02.5-270`、`sv03.5-166`、`mep-107`。
 2. 简体中文独占卡使用自定义小写 id，例如 `cbb1c-07-09`、`151c-170`。
-3. Pokemon TCG Pocket 可以收录，项目简称统一写 `PTCGP`。Pocket 卡不按英文实体卡规则处理，不从 TCGdex 查 set / card，也不套实体卡 Scrydex 路径规则。
-4. Pocket 卡从 Scrydex Pocket expansions 入口查找：https://scrydex.com/pokemon/tcg-pocket/expansions。系列 id 以页面列出的 `tcgp-*` 为准，例如 `tcgp-A1`、`tcgp-A1a`、`tcgp-PA`。
-5. Pocket 卡本地 id 使用规范化小写格式：`tcgp-a1-001`、`tcgp-a1a-086`、`tcgp-pa-001`。
-6. Pocket 卡的 `language` 统一写 `PK`，不写 `EN` / `JP` / `CN`。
-7. 英文实体卡 metadata 主要来自 TCGdex API；简体中文独占卡以本地整理为准；Pocket 卡 metadata 以 Scrydex Pocket 页面和本地整理为准。
-8. 英文实体卡图片来源必须是 Scrydex。
-9. 简体中文独占卡图片来源优先使用 Pokemon.cn；少量尚未替换的旧图可暂时保留 PokiPair。
-10. Pocket 卡图片从 Scrydex Pocket 卡页 / 图片地址获取；每张卡必须记录 `imageSource`，不要和实体卡 Scrydex 路径混用。
-11. Scrydex 实体卡图片只拿 `/large`；Pokemon.cn、PokiPair 和 Pocket 图片只拿记录的原始 URL。
-12. 不从其他网站兜底下载图片。
+3. 繁中卡 `language` 写 `TW`。
+4. 日文卡 `language` 写 `JP`，`cardName` 用日文名。
+5. Pocket 卡 `language` 写 `PK`。
+6. `cardName` 只写卡名，不写 `printedName`。
+7. `number` 只保存卡面编号本身，不保存斜线后的总数。
+8. `printedNumber` 不逐卡保存，显示时由 `number` 和 `setsById[setId].total` 派生。
+9. `releaseDate` 默认只写在 `setsById` 系列信息里；不要把 release date 写进单卡。
+10. 单卡 `releaseDate` 只在确实有精确日期且不同于系列日期时使用，不写 `YYYY-MM-01` 这种占位。
 
-TCGdex 查不到 metadata 的少量实体卡会使用已有本地 JSON 信息兜底，但图片规则仍然只允许 Scrydex、Pokemon.cn 或 PokiPair。Pocket 卡不按实体卡 TCGdex / Scrydex 路径规则兜底，只从 Scrydex Pocket 入口继续查。
+`dexIds` 只在一张卡对应多个全国图鉴编号时使用，比如 Tag Team。卡片实体只保留一份；页面加载时会动态挂到多个宝可梦下面。
+
+```js
+{
+  id: "sm9-162",
+  cardName: "Pikachu & Zekrom GX",
+  dexIds: [25, 644]
+}
+```
+
+简中变种编号例子：
+
+```js
+{
+  id: "cbb1c-07-09",
+  setId: "cbb1c",
+  number: "07",
+  variant: { number: "09", total: "09" }
+}
+```
+
+显示时会派生成 `0709/09`；菜单和查找 code 会显示成 `7-9`。
 
 ## 图片规则
 
 本地图片统一保存为：
 
 ```text
-assets/cards/{tcgdexCardId}.webp
+assets/cards/{cardId}.webp
 ```
 
 尺寸和格式：
@@ -110,7 +169,17 @@ format = WebP
 alpha  = 保留透明通道
 ```
 
-每张卡必须记录图片来源：
+允许的 `imageSource.provider`：
+
+```text
+Scrydex
+Pokemon.cn
+Pokemon Asia TW
+PokiPair
+Dex local cache
+```
+
+英文实体卡图片优先使用 Scrydex：
 
 ```js
 imageSource: {
@@ -119,57 +188,7 @@ imageSource: {
 }
 ```
 
-## GitHub Releases 卡图托管
-
-GitHub Pages 站点大小建议控制在 1GB 以内，所以卡图不要跟页面一起发布。线上页面会通过 `asset-config.js` 把：
-
-```text
-./assets/cards/sv04.5-127.webp
-```
-
-映射成：
-
-```text
-https://github.com/tflsguoyu/Pokemon-TCG-cards/releases/download/card-assets-sv/sv04.5-127.webp
-```
-
-当前分 5 个 Release，保证每个 release 附件数低于 GitHub 的 1000 个上限：
-
-```text
-card-assets-sv        sv/svp/csv/cs/cbb/151c 开头的卡图
-card-assets-swsh-me   swsh/me/mep 开头的卡图
-card-assets-ptcgp     tcgp-a 开头的 Pokemon TCG Pocket A 系列卡图
-card-assets-ptcgp-b   tcgp-b 开头的 Pokemon TCG Pocket B 系列卡图
-card-assets-legacy    其他旧系列卡图
-```
-
-先确认分组数量：
-
-```sh
-node scripts/03-upload-release-assets.mjs
-```
-
-登录 GitHub CLI 后上传：
-
-```sh
-node scripts/03-upload-release-assets.mjs --execute
-```
-
-本地预览默认继续使用 `assets/cards`。如果要在本地强制测试 Release 图片，在 URL 后加：
-
-```text
-?assets=release
-```
-
-允许的 `provider`：
-
-```text
-Scrydex
-Pokemon.cn
-PokiPair
-```
-
-简体中文独占卡优先使用 Pokemon.cn 图源：
+简中独占卡优先使用 Pokemon.cn，少量旧图可暂时保留 PokiPair。
 
 ```js
 imageSource: {
@@ -182,14 +201,13 @@ imageSource: {
 
 - 只读取 `imageSource.url`
 - 只尝试允许来源的 URL
-- 简体中文卡只允许 Pokemon.cn 或 PokiPair URL，拿不到就汇报缺图，不自动尝试其他网站
 - 自动尝试已知 Scrydex 路径修正规则
 - 跳过 Scrydex 卡背占位图
 - 下载后转成高度 825 的 WebP
 - 保留 alpha
 - 下载失败时保留已有本地图片，并在 summary 里汇报
 
-运行 summary 会写到：
+运行 summary 写到：
 
 ```text
 tmp/02-download-card-images-summary.json
@@ -232,144 +250,7 @@ swsh4.5-SV001  -> https://images.scrydex.com/pokemon/swsh45sv-SV001/large
 swsh12.5-GG70  -> https://images.scrydex.com/pokemon/swsh12pt5gg-GG70/large
 ```
 
-## local-data.js
-
-`local-data.js` 是当前项目的本地事实库。页面和审核页都只读它，不会自动联网更新。
-
-顶层数据：
-
-- `version`：本地数据版本，用来刷新浏览器缓存
-- `generatedAt`：最近一次写入 `local-data.js` 的时间
-- `species`：全国图鉴 1-1025 的英文名
-- `species_cn`：全国图鉴编号对应中文名；`9999` 用作简中独占训练家 / 物品卡的临时分组
-- `setsById`：按 `setId` 存放系列级信息，包括英文系列名、PTCGO code、总张数和发行日
-- `cardsByDex`：按全国图鉴编号分组的卡片列表
-
-系列信息集中写在 `setsById`：
-
-```js
-[
-  [
-    "swsh9",
-    {
-      eraCode: "SWSH",
-      ptcgoCode: "BRS",
-      name: "Brilliant Stars",
-      total: "172",
-      releaseDate: "2022-02-25"
-    }
-  ]
-]
-```
-
-每张卡保留这些字段：
-
-```js
-{
-  id: "swsh9-TG01",
-  language: "EN",
-  cardName: "Flareon",
-  image: "./assets/cards/swsh9-TG01.webp",
-  form: { key: "base", label: "Base", rank: 0 },
-  isShiny: false,
-  backgroundType: "content",
-  tags: ["forest", "trees", "flowers", "solo", "peaceful", "green"],
-  setId: "swsh9",
-  number: "TG01",
-  rarity: "Trainer Gallery Rare Holo",
-  label: "TG",
-  imageSource: {
-    provider: "Scrydex",
-    url: "https://images.scrydex.com/pokemon/swsh9tg-TG01/large"
-  },
-  rank: 1
-}
-```
-
-`dexIds` 只在一张卡对应多个全国图鉴编号时使用，比如 Tag Team。卡片实体只保留一份；页面加载时会用 `dexIds` 动态挂到多个宝可梦下面。
-
-```js
-{
-  id: "sm9-162",
-  cardName: "Pikachu & Zekrom GX",
-  dexIds: [25, 644]
-}
-```
-
-`releaseDate` 是可选的单卡发行日，只在有精确到日且不同于系列发行日时才写。默认排序使用 `setsById` 里的系列发行日；不要写 `YYYY-MM-01` 这类月度占位日期。
-
-`printedNumber` 不再逐卡保存；显示时由 `number` 和 `setsById[setId].total` 组合出来。没有 `total` 的系列只显示 `number`。
-
-部分简中卡面会用类似 `0709/09` 的变种编号。这里 `07` 是主编号，`09/09` 是这张主卡的第 9 个变种 / 共 9 个变种。这类卡写成：
-
-```js
-{
-  id: "cbb1c-07-09",
-  setId: "cbb1c",
-  number: "07",
-  variant: { number: "09", total: "09" }
-}
-```
-
-显示时会派生成 `0709/09`；菜单和查找 code 会显示成 `7-9`。
-
-Pocket 卡使用独立系列 id，不和实体卡系列混在一起。`setId` 使用 Scrydex Pocket 页面列出的 `tcgp-*`，保留原大小写；本地卡 `id` 使用小写 `tcgp-*`。`number` 保留 Pocket 卡面编号本身；如果卡面编号有星级、皇冠、promo 等展示信息，写在 `label` / `rarity`，不要塞进 `number`。
-
-```js
-[
-  [
-    "tcgp-A1",
-    {
-      eraCode: "PTCGP",
-      ptcgoCode: "A1",
-      name: "Genetic Apex",
-      total: "226",
-      releaseDate: "2024-10-30"
-    }
-  ]
-]
-```
-
-```js
-{
-  id: "tcgp-a1-001",
-  language: "PK",
-  cardName: "Bulbasaur",
-  image: "./assets/cards/tcgp-a1-001.webp",
-  form: { key: "base", label: "Base", rank: 0 },
-  isShiny: false,
-  backgroundType: "content",
-  tags: ["forest", "plants", "solo", "green"],
-  setId: "tcgp-A1",
-  number: "001",
-  rarity: "Diamond",
-  label: "PTCGP",
-  imageSource: {
-    provider: "PTCGP",
-    url: "https://..."
-  },
-  rank: 4
-}
-```
-
-这些字段不要写在单张卡里；系列级信息统一放在 `setsById`，显示字段运行时派生：
-
-```text
-eraCode
-ptcgoCode
-setName
-setDisplayCode
-printedNumber
-fallbackImage
-highImage
-highFallbackImage
-imageSources
-primaryDexId
-updated
-form.pattern
-```
-
-## 背景分类
+## 背景分类和标签
 
 每张卡都有：
 
@@ -379,15 +260,15 @@ backgroundType: "content" | "simple" | "other"
 tags: string[]
 ```
 
-`backgroundType` 含义：
+`backgroundType`：
 
 - `content`：背景有具体内容、场景、构图
 - `simple`：背景是简单颜色、纹理、纯色或普通全图背景
 - `other`：不是这两类，或者保留但不参与这两个背景分类
 
-`tags` 只给 `backgroundType: "content"` 的卡使用，用来描述图面内容。标签使用英文小写短词组，优先服务搜索和主题页浏览；不要重复写已有 metadata，例如系列名、稀有度、卡牌编号。
+`tags` 只给 `backgroundType: "content"` 的卡使用。标签用英文小写短词组，服务搜索和主题页浏览；不要重复写系列名、稀有度、卡牌编号这类 metadata。
 
-标签类型包括：
+常用标签类型：
 
 ```text
 场景地点        forest, beach, underwater, city, room, garden, mountain
@@ -427,36 +308,149 @@ Crown  Pokemon TCG Pocket Crown      rank 2
 Shiny  Pokemon TCG Pocket shiny      rank 1
 ```
 
+## GitHub Releases 卡图托管
+
+GitHub Pages 站点大小建议控制在 1GB 以内，所以卡图不要跟页面一起发布。线上页面会通过 `asset-config.js` 把：
+
+```text
+./assets/cards/sv04.5-127.webp
+```
+
+映射成：
+
+```text
+https://github.com/tflsguoyu/Pokemon-TCG-cards/releases/download/card-assets-sv/sv04.5-127.webp
+```
+
+当前 Release 分组：
+
+```text
+card-assets-sv        sv/svp/csv/cs/cbb/151c 开头的卡图
+card-assets-swsh-me   swsh/me/mep 开头的卡图
+card-assets-ptcgp     tcgp-a / tcgp-p 开头的 Pocket A / Promo 系列卡图
+card-assets-ptcgp-b   tcgp-b 开头的 Pocket B 系列卡图
+card-assets-legacy    其他旧系列卡图
+```
+
+本地预览默认继续使用 `assets/cards`。如果要本地强制测试 Release 图片，在 URL 后加：
+
+```text
+?assets=release
+```
+
+## local-data.js
+
+`local-data.js` 是当前项目的本地事实库。页面和审核页都只读它，不会自动联网更新。
+
+顶层数据：
+
+- `version`：本地数据版本，用来刷新浏览器缓存
+- `generatedAt`：最近一次写入 `local-data.js` 的时间
+- `species`：全国图鉴 1-1025 的英文名
+- `species_cn`：全国图鉴编号对应中文名；`9999` 用作简中独占训练家 / 物品卡的临时分组
+- `species_ja`：全国图鉴编号对应日文名
+- `setsById`：按 `setId` 存放系列级信息，包括英文系列名、PTCGO code、总张数和发行日
+- `cardsByDex`：按全国图鉴编号分组的卡片列表
+
+系列信息集中写在 `setsById`：
+
+```js
+[
+  [
+    "swsh9",
+    {
+      eraCode: "SWSH",
+      ptcgoCode: "BRS",
+      name: "Brilliant Stars",
+      total: "172",
+      releaseDate: "2022-02-25"
+    }
+  ]
+]
+```
+
+单卡示例：
+
+```js
+{
+  id: "swsh9-TG01",
+  language: "EN",
+  cardName: "Flareon",
+  image: "./assets/cards/swsh9-TG01.webp",
+  form: { key: "base", label: "Base", rank: 0 },
+  isShiny: false,
+  backgroundType: "content",
+  tags: ["forest", "trees", "flowers", "solo", "peaceful", "green"],
+  setId: "swsh9",
+  number: "TG01",
+  rarity: "Trainer Gallery Rare Holo",
+  label: "TG",
+  imageSource: {
+    provider: "Scrydex",
+    url: "https://images.scrydex.com/pokemon/swsh9tg-TG01/large"
+  },
+  rank: 1
+}
+```
+
+这些字段不要写在单张卡里；系列级信息统一放在 `setsById`，显示字段运行时派生：
+
+```text
+eraCode
+ptcgoCode
+setName
+setDisplayCode
+printedNumber
+fallbackImage
+highImage
+highFallbackImage
+imageSources
+primaryDexId
+updated
+form.pattern
+```
+
+## 脚本索引
+
+```text
+scripts/01-add-card-json.mjs                  添加指定 TCGdex card id 的 JSON 信息，不下载图片
+scripts/02-download-card-images.mjs           按 JSON 图源下载图片并转成本地 WebP
+scripts/03-upload-release-assets.mjs          把本地卡图按分组上传到 GitHub Releases
+scripts/maintenance-refresh-all-json.mjs      刷新全量本地卡牌 JSON 信息，不下载图片
+scripts/maintenance-apply-review-results.mjs  应用审核页保存的结果
+scripts/maintenance-apply-content-tags.mjs    批量应用内容标签
+scripts/tool-find-card.mjs                    本地查卡
+scripts/tool-import-dex-cache-image.mjs       从本机 Dex App 图片缓存导入兜底卡图
+scripts/lib-version-utils.mjs                 写入 local-data.js 并同步缓存版本
+```
+
+更多脚本用法见 `scripts/README.md`。
+
 ## 本地运行
 
 直接打开：
 
 ```text
 index.html
-```
-
-审核页面：
-
-```text
+tags.html
 review.html
 ```
 
-如果想开本地服务：
+或者启动本地服务：
 
 ```sh
 python3 -m http.server 4178
 ```
 
-然后访问：
+访问：
 
 ```text
 http://localhost:4178/
+http://localhost:4178/tags.html
 http://localhost:4178/review.html
 ```
 
 ## 查卡
-
-先查本地库：
 
 ```sh
 node scripts/tool-find-card.mjs "SV-JTG-184"
