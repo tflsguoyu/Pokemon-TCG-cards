@@ -839,9 +839,8 @@ h2 {
   .density-row {
     flex: 0 0 100%;
     display: grid;
-    grid-template-columns: auto auto 128px;
+    grid-template-columns: auto auto minmax(0, 1fr);
     gap: 5px;
-    justify-content: space-between;
     width: 100%;
   }
 
@@ -849,7 +848,7 @@ h2 {
     grid-template-columns: auto minmax(0, 1fr);
     gap: 5px;
     justify-self: end;
-    width: 128px;
+    width: 100%;
     min-height: 34px;
     padding: 3px 6px;
   }
@@ -864,14 +863,6 @@ h2 {
     justify-content: center;
     min-height: 34px;
     padding: 3px 7px;
-  }
-
-  .background-filter input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
   }
 
   .status {
@@ -909,14 +900,6 @@ h2 {
 
   .density-row .status-hide-pk-mobile {
     min-width: 0;
-  }
-
-  .density-row .status-toggle input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
   }
 
   .search,
