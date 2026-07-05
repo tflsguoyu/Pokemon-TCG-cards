@@ -1,4 +1,4 @@
-const CACHE_VERSION = 316;
+const CACHE_VERSION = 333;
 
 const NATIONAL_DEX_RANGES = {
   1: [1, 151],
@@ -35,6 +35,7 @@ const state = {
   generation: "all",
   viewMode: "all",
   shinyOnly: false,
+  hidePocket: false,
   backgroundFilters: {
     content: true,
     simple: true,
@@ -54,13 +55,16 @@ const els = {
   generation: document.querySelector("#generationSelect"),
   withImagesViewBtn: document.querySelector("#withImagesViewBtn"),
   allViewBtn: document.querySelector("#allViewBtn"),
-  shinyOnly: document.querySelector("#shinyOnlyInput"),
+  expandViewBtn: document.querySelector("#expandViewBtn"),
+  shinyOnlyInputs: Array.from(document.querySelectorAll(".shiny-only-input")),
+  hidePocketInputs: Array.from(document.querySelectorAll(".hide-pocket-input")),
   contentBackground: document.querySelector("#contentBackgroundInput"),
   simpleBackground: document.querySelector("#simpleBackgroundInput"),
   columnsInput: document.querySelector("#columnsInput"),
   columnsCount: document.querySelector("#columnsCount"),
   withImagesCount: document.querySelector("#withImagesCount"),
   totalSummaryCount: document.querySelector("#totalSummaryCount"),
+  expandCardsCount: document.querySelector("#expandCardsCount"),
   imageDialog: document.querySelector("#imageDialog"),
   dialogImage: document.querySelector("#dialogImage"),
   dialogCaption: document.querySelector("#dialogCaption"),
@@ -111,10 +115,24 @@ function wireControls() {
     render();
   });
 
-  els.shinyOnly.addEventListener("change", () => {
-    state.shinyOnly = els.shinyOnly.checked;
+  els.expandViewBtn.addEventListener("click", () => {
+    state.viewMode = "expand";
     render();
   });
+
+  for (const input of els.shinyOnlyInputs) {
+    input.addEventListener("change", () => {
+      state.shinyOnly = input.checked;
+      render();
+    });
+  }
+
+  for (const input of els.hidePocketInputs) {
+    input.addEventListener("change", () => {
+      state.hidePocket = input.checked;
+      render();
+    });
+  }
 
   els.contentBackground.addEventListener("change", () => {
     state.backgroundFilters.content = els.contentBackground.checked;
@@ -256,10 +274,18 @@ function buildCardsByDexIndex(cardsByDex) {
 function render() {
   const species = getRenderableSpecies();
   els.grid.replaceChildren();
+  els.grid.classList.toggle("expand-mode", state.viewMode === "expand");
 
   const fragment = document.createDocumentFragment();
-  for (const mon of species) {
-    fragment.appendChild(renderDexCard(mon));
+  if (state.viewMode === "expand") {
+    const cards = getExpandedCardsForSpecies(species);
+    for (const card of cards) {
+      fragment.appendChild(renderExpandedCardImage(card, cards));
+    }
+  } else {
+    for (const mon of species) {
+      fragment.appendChild(renderDexCard(mon));
+    }
   }
 
   els.grid.appendChild(fragment);
@@ -269,13 +295,20 @@ function render() {
 function updateSummary() {
   const scopedSpecies = getScopedSpecies();
   const withImages = scopedSpecies.filter((mon) => hasVisibleCardImage(mon.id)).length;
+  const expandedCards = scopedSpecies.reduce((total, mon) => {
+    return total + getExpandedCards(getVisibleCards(mon.id)).filter((card) => getImageUrls(card, "low").length > 0).length;
+  }, 0);
   els.withImagesCount.textContent = withImages;
   els.totalSummaryCount.textContent = scopedSpecies.length;
+  els.expandCardsCount.textContent = expandedCards;
   els.withImagesViewBtn.classList.toggle("active", state.viewMode === "with-images");
   els.allViewBtn.classList.toggle("active", state.viewMode === "all");
+  els.expandViewBtn.classList.toggle("active", state.viewMode === "expand");
   els.withImagesViewBtn.setAttribute("aria-pressed", String(state.viewMode === "with-images"));
   els.allViewBtn.setAttribute("aria-pressed", String(state.viewMode === "all"));
-  els.shinyOnly.checked = state.shinyOnly;
+  els.expandViewBtn.setAttribute("aria-pressed", String(state.viewMode === "expand"));
+  for (const input of els.shinyOnlyInputs) input.checked = state.shinyOnly;
+  for (const input of els.hidePocketInputs) input.checked = state.hidePocket;
   els.contentBackground.checked = state.backgroundFilters.content;
   els.simpleBackground.checked = state.backgroundFilters.simple;
   els.contentBackground.disabled = state.shinyOnly;
@@ -284,10 +317,14 @@ function updateSummary() {
 
 function getRenderableSpecies() {
   const scopedSpecies = getScopedSpecies();
-  if (state.viewMode === "with-images") {
+  if (state.viewMode === "with-images" || state.viewMode === "expand") {
     return scopedSpecies.filter((mon) => hasVisibleCardImage(mon.id));
   }
   return scopedSpecies;
+}
+
+function getExpandedCardsForSpecies(species) {
+  return species.flatMap((mon) => getExpandedCards(getVisibleCards(mon.id))).filter((card) => getImageUrls(card, "low").length > 0);
 }
 
 function getScopedSpecies() {
@@ -308,7 +345,7 @@ function getScopedSpecies() {
 }
 
 function getSpeciesSearchText(mon, cnName, jaName) {
-  const cards = state.cardsByDex.get(mon.id) || [];
+  const cards = getVisibleCards(mon.id);
   return [
     String(mon.id).padStart(4, "0"),
     mon.name,
@@ -341,7 +378,7 @@ function getCardDexSearchText(card, fallbackDexId) {
 }
 
 function getSpeciesTagText(dexId) {
-  return (state.cardsByDex.get(dexId) || [])
+  return getVisibleCards(dexId)
     .flatMap((card) => (Array.isArray(card.tags) ? card.tags : []))
     .join(" ");
 }
@@ -351,13 +388,25 @@ function hasVisibleCardImage(dexId) {
 }
 
 function hasFilteredCardImage(dexId) {
-  return (state.cardsByDex.get(dexId) || []).some(
+  return getVisibleCards(dexId).some(
     (card) => isCardVisibleByBackground(card) && getImageUrls(card, "low").length > 0
   );
 }
 
 function hasShinyCardImage(dexId) {
-  return (state.cardsByDex.get(dexId) || []).some((card) => card.isShiny && getImageUrls(card, "low").length > 0);
+  return getVisibleCards(dexId).some((card) => card.isShiny && getImageUrls(card, "low").length > 0);
+}
+
+function getVisibleCards(dexId) {
+  return (state.cardsByDex.get(dexId) || []).filter(isCardVisibleByLanguage);
+}
+
+function isCardVisibleByLanguage(card) {
+  return !(state.hidePocket && isPocketCard(card));
+}
+
+function isPocketCard(card) {
+  return String(card.language || "").toUpperCase() === "PK";
 }
 
 function isCardVisibleByBackground(card) {
@@ -378,7 +427,7 @@ function getStoredBackgroundType(card) {
 
 function renderDexCard(mon) {
   const node = els.template.content.firstElementChild.cloneNode(true);
-  const cards = state.cardsByDex.get(mon.id) || [];
+  const cards = getVisibleCards(mon.id);
   const zhName = state.speciesCnByDex.get(mon.id) || "";
   let activeFormKey = state.shinyOnly ? "shiny" : "base";
 
@@ -530,6 +579,33 @@ function renderDexCard(mon) {
   });
 
   return node;
+}
+
+function renderExpandedCardImage(card, cards) {
+  const button = document.createElement("button");
+  button.className = "expanded-card-image";
+  button.type = "button";
+  button.setAttribute("aria-label", formatCardOptionLabel(card));
+
+  const image = document.createElement("img");
+  image.alt = `${card.cardName} ${getCardSourceLabel(card)}`;
+  image.loading = "lazy";
+  applyImageUrls(image, getImageUrls(card, "low"));
+  button.appendChild(image);
+
+  button.addEventListener("click", () => {
+    openHighResImage(card, cards.filter((item) => getImageUrls(item, "high").length > 0));
+  });
+
+  return button;
+}
+
+function getExpandedCards(cards) {
+  if (state.shinyOnly) {
+    return sortCardsForMenu(cards.filter((card) => card.isShiny));
+  }
+
+  return sortCardsForMenu(cards.filter((card) => isCardVisibleByBackground(card)));
 }
 
 function openCandidateDialog(cards, selectedCardId, onSelect) {
@@ -851,6 +927,7 @@ function setStatus() {
   if (!state.species.length) {
     els.withImagesCount.textContent = "0";
     els.totalSummaryCount.textContent = "0";
+    els.expandCardsCount.textContent = "0";
   }
 }
 

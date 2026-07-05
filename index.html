@@ -11,7 +11,7 @@
     <title>PTCG 全国图鉴 / National Dex</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="./styles.css?v=316" />
+    <link rel="stylesheet" href="./styles.css?v=333" />
   </head>
   <body>
     <header class="topbar">
@@ -57,13 +57,6 @@
             <option value="9">Gen 9</option>
           </select>
         </label>
-        <label class="status-shiny">
-          <input id="shinyOnlyInput" type="checkbox" />
-          <span class="tool-label">
-            <span>闪光</span>
-            <span>Shiny</span>
-          </span>
-        </label>
       </section>
       <div class="view-tools">
         <div class="background-filters" aria-label="背景筛选 / Background filters">
@@ -83,26 +76,62 @@
           </label>
         </div>
         <div class="status" id="status" aria-label="显示范围 / View mode">
-          <button id="withImagesViewBtn" class="status-filter" type="button" aria-pressed="false">
-            <span class="tool-label">
-              <span>有图 <span id="withImagesCount" class="inline-count">0</span></span>
-              <span>With images</span>
-            </span>
-          </button>
           <button id="allViewBtn" class="status-filter active" type="button" aria-pressed="true">
             <span class="tool-label">
-              <span>全部 <span id="totalSummaryCount" class="inline-count">0</span></span>
+              <span id="totalSummaryCount">0</span>
               <span>Total</span>
             </span>
           </button>
+          <button id="withImagesViewBtn" class="status-filter" type="button" aria-pressed="false">
+            <span class="tool-label">
+              <span>有 <span id="withImagesCount" class="inline-count">0</span></span>
+              <span>Card</span>
+            </span>
+          </button>
+          <button id="expandViewBtn" class="status-filter" type="button" aria-pressed="false">
+            <span class="tool-label">
+              <span>卡 <span id="expandCardsCount" class="inline-count">0</span></span>
+              <span>Expand</span>
+            </span>
+          </button>
         </div>
-        <label class="density-control">
+        <label class="status-toggle status-shiny status-shiny-desktop">
+          <input class="shiny-only-input" id="shinyOnlyInput" type="checkbox" />
           <span class="tool-label">
-            <span>每行 <span id="columnsCount" class="inline-count">6</span></span>
-            <span>Columns</span>
+            <span>闪光</span>
+            <span>Shiny</span>
           </span>
-          <input id="columnsInput" type="range" min="6" max="55" value="6" />
         </label>
+        <label class="status-toggle status-hide-pk status-hide-pk-desktop">
+          <input class="hide-pocket-input" id="hidePocketInput" type="checkbox" />
+          <span class="tool-label">
+            <span>隐藏 PK</span>
+            <span>Hide PK</span>
+          </span>
+        </label>
+        <div class="density-row">
+          <label class="status-toggle status-shiny status-shiny-mobile">
+            <input class="shiny-only-input" id="shinyOnlyMobileInput" type="checkbox" />
+            <span class="tool-label">
+              <span>闪光</span>
+              <span>Shiny</span>
+            </span>
+          </label>
+          <label class="status-toggle status-hide-pk status-hide-pk-mobile">
+            <input class="hide-pocket-input" id="hidePocketMobileInput" type="checkbox" />
+            <span class="tool-label">
+              <span>隐藏 PK</span>
+              <span>Hide PK</span>
+            </span>
+          </label>
+          <label class="density-control">
+            <span class="tool-label">
+              <span>每行 <span id="columnsCount" class="inline-count">6</span></span>
+              <span>Columns</span>
+            </span>
+            <input id="columnsInput" type="range" min="6" max="55" value="6" />
+          </label>
+        </div>
       </div>
     </header>
 
@@ -147,9 +176,9 @@
       <button id="nextImageBtn" class="image-nav image-nav-next" type="button" aria-label="下一张 / Next image">›</button>
     </dialog>
 
-    <script src="./asset-config.js?v=316"></script>
-    <script src="./form-index.js?v=316"></script>
-    <script src="./local-data.js?v=316"></script>
-    <script src="./app.js?v=316"></script>
+    <script src="./asset-config.js?v=333"></script>
+    <script src="./form-index.js?v=333"></script>
+    <script src="./local-data.js?v=333"></script>
+    <script src="./app.js?v=333"></script>
   </body>
 </html>
