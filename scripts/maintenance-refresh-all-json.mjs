@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { getCardImagePath } from "./lib-card-image-paths.mjs";
 import { readLocalData, writeLocalData } from "./lib-version-utils.mjs";
 
 const TMP_DIR = "tmp/maintenance-refresh-all-json";
 const SUMMARY_PATH = `${TMP_DIR}/summary.json`;
-const CARD_DIR = "assets/cards";
 const CONCURRENCY = Number(process.env.REFRESH_CARD_JSON_CONCURRENCY || 8);
 
 mkdirSync(TMP_DIR, { recursive: true });
@@ -136,7 +136,6 @@ function refreshLocalCard(card, remote, currentDexId) {
 
   card.language = card.language || "EN";
   card.cardName = cardName;
-  card.image = `./${CARD_DIR}/${card.id}.webp`;
   card.form = classifyForm(cardName);
   card.isShiny = isShinyCard(remote) || Boolean(card.isShiny);
   card.backgroundType = card.backgroundType || "content";
@@ -145,6 +144,7 @@ function refreshLocalCard(card, remote, currentDexId) {
   card.rarity = remote?.rarity || card.rarity || "None";
   card.label = label;
   card.rank = rank;
+  card.image = getCardImagePath(card);
   card.imageSource = {
     provider: "Scrydex",
     url: getScrydexImageSource(setId, number),

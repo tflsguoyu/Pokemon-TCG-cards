@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
+import { getCardImageFsPath } from "./lib-card-image-paths.mjs";
 import { writeLocalData } from "./lib-version-utils.mjs";
 
 const DATA_PATH = "local-data.js";
@@ -92,7 +93,7 @@ console.log(JSON.stringify(summary, null, 2));
 
 async function refreshCard(card, index) {
   const id = String(card.id);
-  const output = `${CARD_DIR}/${id}.webp`;
+  const output = getCardImageFsPath(card);
   const candidates = getCandidates(card);
   const downloaded = [];
 

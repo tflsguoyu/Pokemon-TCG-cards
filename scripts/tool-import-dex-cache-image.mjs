@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { normalizeCardImageFileNameFromId } from "./lib-card-image-paths.mjs";
 
 const DEFAULT_CACHE_DIR = join(
   process.env.HOME || "",
@@ -70,7 +71,7 @@ if (options.sheet) {
 
 for (const item of options.imports) {
   const source = resolveCacheFile(cacheDir, item.cacheName);
-  const output = join(CARD_DIR, `${item.cardId}.webp`);
+  const output = join(CARD_DIR, normalizeCardImageFileNameFromId(item.cardId));
   mkdirSync(CARD_DIR, { recursive: true });
   execFileSync("magick", [source, "-resize", `x${IMAGE_HEIGHT}`, "-quality", "92", output]);
   const info = identify(output);

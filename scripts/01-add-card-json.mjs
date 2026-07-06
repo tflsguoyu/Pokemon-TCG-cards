@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { getCardImagePath } from "./lib-card-image-paths.mjs";
 import { writeLocalData } from "./lib-version-utils.mjs";
 
 const DATA_PATH = "local-data.js";
@@ -87,11 +88,10 @@ function buildLocalCard(card, data) {
   const cardName = card.name || speciesByDex.get(Number(card.dexId?.[0])) || "";
   const imageSource = getScrydexImageSource(card);
 
-  return {
+  const localCard = {
     id: card.id,
     language: "EN",
     cardName,
-    image: `./${CARD_DIR}/${card.id}.webp`,
     form: classifyForm(cardName),
     isShiny: isShinyCard(card),
     backgroundType: "content",
@@ -105,6 +105,8 @@ function buildLocalCard(card, data) {
       url: imageSource,
     },
   };
+  localCard.image = getCardImagePath(localCard);
+  return localCard;
 }
 
 function getPtcgoCode(card) {
